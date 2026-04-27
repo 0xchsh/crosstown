@@ -33,5 +33,5 @@ export interface TransitionConfig {
 export const DEFAULT_CONFIG: TransitionConfig = {
   preset: 'crossfade',
   duration: 300,
-  easing: 'easeOut',
+  easing: 'standard',
 };

@@ -125,8 +125,7 @@ export function Toolbar() {
   if (!expanded) {
     return (
       <div style={styles.container}>
-        <button
-          type="button"
+        <Pressable
           style={styles.pill}
           onClick={() => setExpanded(true)}
           aria-label="Open Crosstown toolbar"
@@ -136,7 +135,7 @@ export function Toolbar() {
           <span>
             {PRESET_LABELS[config.preset]} · {config.duration}ms
           </span>
-        </button>
+        </Pressable>
       </div>
     );
   }
@@ -146,15 +145,14 @@ export function Toolbar() {
       <div style={styles.panel}>
         <div style={styles.header}>
           <span style={styles.title}>Crosstown</span>
-          <button
-            type="button"
+          <Pressable
             style={styles.iconButton}
             onClick={() => setExpanded(false)}
             aria-label="Close Crosstown toolbar"
             title="Close (⌘⇧T)"
           >
             ×
-          </button>
+          </Pressable>
         </div>
 
         <Row label="Preset">
@@ -201,8 +199,7 @@ export function Toolbar() {
         </Row>
 
         <div style={styles.actionRow}>
-          <button
-            type="button"
+          <Pressable
             style={styles.playButton}
             onClick={dispatchReplay}
             aria-label="Replay current transition"
@@ -210,9 +207,8 @@ export function Toolbar() {
           >
             <span aria-hidden="true">▶</span>
             <span>Play</span>
-          </button>
-          <button
-            type="button"
+          </Pressable>
+          <Pressable
             style={
               copied
                 ? { ...styles.copyButton, ...styles.copyButtonCopied }
@@ -222,7 +218,7 @@ export function Toolbar() {
             aria-label="Copy config-first prompt to clipboard"
           >
             {copied ? 'Copied' : 'Copy prompt'}
-          </button>
+          </Pressable>
         </div>
 
         <div style={styles.footer}>
@@ -294,6 +290,50 @@ function SliderRow({
         style={styles.slider}
       />
     </div>
+  );
+}
+
+// Per Emil Kowalski: buttons must feel responsive to press. transform: scale(0.97)
+// gives the interface "instant feedback that it heard the user." Inline-style
+// constraint of v0.1 means we manage the pressed state in React rather than via
+// :active CSS — the transition smooths the un-press.
+function Pressable({
+  style,
+  children,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  style: React.CSSProperties;
+}) {
+  const [pressed, setPressed] = useState(false);
+  const release = () => setPressed(false);
+  return (
+    <button
+      type="button"
+      {...props}
+      style={{
+        ...style,
+        transform: pressed ? 'scale(0.97)' : 'scale(1)',
+        transition: 'transform 160ms cubic-bezier(0.2, 0, 0, 1)',
+      }}
+      onPointerDown={(e) => {
+        setPressed(true);
+        props.onPointerDown?.(e);
+      }}
+      onPointerUp={(e) => {
+        release();
+        props.onPointerUp?.(e);
+      }}
+      onPointerCancel={(e) => {
+        release();
+        props.onPointerCancel?.(e);
+      }}
+      onPointerLeave={(e) => {
+        release();
+        props.onPointerLeave?.(e);
+      }}
+    >
+      {children}
+    </button>
   );
 }
 

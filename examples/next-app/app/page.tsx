@@ -66,7 +66,7 @@ export default function Home() {
 
       <section className="section">
         <div className="section-label">Installation</div>
-        <pre className="code-block terminal">npm install crosstown framer-motion</pre>
+        <pre className="code-block terminal">npm install crosstown</pre>
         <p style={{ color: 'var(--text-dim)' }}>
           Then drop it into your root layout:
         </p>

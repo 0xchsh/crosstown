@@ -1,6 +1,12 @@
 'use client';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import {
+  AnimatePresence,
+  LazyMotion,
+  domAnimation,
+  m,
+  useReducedMotion,
+} from 'motion/react';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { getPresetMotion } from './presets';
@@ -33,10 +39,17 @@ const itemStyle: CSSProperties = {
   gridArea: '1 / 1',
   width: '100%',
   minHeight: '100%',
+  // Hint to the browser to promote this to a GPU layer up front. Keeps slides
+  // and pushes smooth even when the main thread is busy (per Emil Kowalski's
+  // performance notes — motion's transform shorthand isn't always GPU-accel).
+  willChange: 'transform, opacity, clip-path, filter',
 };
+
+const REDUCED_MOTION_DURATION_CAP = 200;
 
 export function Wrapper({ children, config }: WrapperProps) {
   const pathname = usePathname();
+  const prefersReducedMotion = useReducedMotion();
   const [storedConfig, setStoredConfig] = useState<TransitionConfig | null>(
     null,
   );
@@ -59,25 +72,37 @@ export function Wrapper({ children, config }: WrapperProps) {
   }, [config]);
 
   const active = config ?? storedConfig ?? DEFAULT_CONFIG;
-  const motionProps = getPresetMotion(active);
+  // When the user prefers reduced motion, fall back to a brief crossfade.
+  // Per Emil/WCAG: don't disable transitions entirely — opacity changes still
+  // aid comprehension; just remove movement and shorten duration.
+  const effectiveConfig: TransitionConfig = prefersReducedMotion
+    ? {
+        preset: 'crossfade',
+        duration: Math.min(active.duration, REDUCED_MOTION_DURATION_CAP),
+        easing: active.easing,
+      }
+    : active;
+  const motionProps = getPresetMotion(effectiveConfig);
   const compositeKey = `${pathname ?? ''}::${replayKey}`;
 
   return (
-    <div style={containerStyle}>
-      <AnimatePresence initial={false}>
-        <motion.div
-          key={compositeKey}
-          style={itemStyle}
-          // framer-motion's prop types for these are deeply union'd; the cast
-          // accepts our loose preset shape without giving up runtime safety.
-          initial={motionProps.initial as never}
-          animate={motionProps.animate as never}
-          exit={motionProps.exit as never}
-          transition={motionProps.transition}
-        >
-          {children}
-        </motion.div>
-      </AnimatePresence>
-    </div>
+    <LazyMotion features={domAnimation} strict>
+      <div style={containerStyle}>
+        <AnimatePresence initial={false}>
+          <m.div
+            key={compositeKey}
+            style={itemStyle}
+            // motion's prop types for these are deeply union'd; the cast accepts
+            // our loose preset shape without giving up runtime safety.
+            initial={motionProps.initial as never}
+            animate={motionProps.animate as never}
+            exit={motionProps.exit as never}
+            transition={motionProps.transition as never}
+          >
+            {children}
+          </m.div>
+        </AnimatePresence>
+      </div>
+    </LazyMotion>
   );
 }

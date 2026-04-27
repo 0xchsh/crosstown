@@ -10,7 +10,7 @@ A dev-only floating toolbar for tuning page transitions on localhost. Six built-
 npm install crosstown
 ```
 
-Peer deps: `react >=18`, `react-dom >=18`, `framer-motion >=11`.
+Works with Next.js 14+ (App Router). Bundles its own animation engine ([motion.dev](https://motion.dev)) so there's nothing else to install.
 
 ## Usage
 
@@ -56,7 +56,6 @@ Fourteen flat presets — pick one in the toolbar, no sub-options to configure.
 
 - React 18+
 - Next.js 14+ (App Router only for v0.1)
-- Framer Motion 11+
 
 ## License
 

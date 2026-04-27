@@ -35,25 +35,35 @@ export function getPresetMotion(config: TransitionConfig): PresetMotion {
   const t: InlineTransition = { duration: dur, ease };
 
   switch (config.preset) {
+    // Subtle blur paired with opacity bridges the visual gap between two states
+    // when their content overlaps (per Emil Kowalski's crossfade notes). Without
+    // it, a same-content preview looks like nothing's animating; with 2px of
+    // blur, the eye reads "one transformation" instead of "two layers swapping."
     case 'crossfade':
       return {
-        initial: { opacity: 0 },
-        animate: { opacity: 1 },
-        exit: { opacity: 0 },
+        initial: { opacity: 0, filter: 'blur(2px)' },
+        animate: { opacity: 1, filter: 'blur(0px)' },
+        exit: { opacity: 0, filter: 'blur(2px)' },
         transition: t,
       };
 
     // Old fades out completely (first half), then new fades in (second half).
-    // Per-variant transitions override the outer one.
+    // More blur than crossfade so the gap between fades reads as motion rather
+    // than a stutter.
     case 'fade-out-in': {
       const half = dur / 2;
       return {
-        initial: { opacity: 0 },
+        initial: { opacity: 0, filter: 'blur(4px)' },
         animate: {
           opacity: 1,
+          filter: 'blur(0px)',
           transition: { duration: half, ease, delay: half },
         },
-        exit: { opacity: 0, transition: { duration: half, ease } },
+        exit: {
+          opacity: 0,
+          filter: 'blur(4px)',
+          transition: { duration: half, ease },
+        },
         transition: t,
       };
     }
@@ -94,35 +104,45 @@ export function getPresetMotion(config: TransitionConfig): PresetMotion {
 
     // Push: both pages translate in the same direction; the new page enters from
     // one side as the old page exits to the other. Same viewport-unit treatment
-    // as Slide.
-    case 'push-left':
+    // as Slide. Exit runs at 70% of the configured duration — per Emil's
+    // asymmetric-timing pattern: fast where the system is responding (exit),
+    // its natural pace where the user is watching (enter).
+    case 'push-left': {
+      const exitT = { duration: dur * 0.7, ease };
       return {
         initial: { x: '100vw' },
         animate: { x: 0 },
-        exit: { x: '-100vw' },
+        exit: { x: '-100vw', transition: exitT },
         transition: t,
       };
-    case 'push-right':
+    }
+    case 'push-right': {
+      const exitT = { duration: dur * 0.7, ease };
       return {
         initial: { x: '-100vw' },
         animate: { x: 0 },
-        exit: { x: '100vw' },
+        exit: { x: '100vw', transition: exitT },
         transition: t,
       };
-    case 'push-up':
+    }
+    case 'push-up': {
+      const exitT = { duration: dur * 0.7, ease };
       return {
         initial: { y: '100vh' },
         animate: { y: 0 },
-        exit: { y: '-100vh' },
+        exit: { y: '-100vh', transition: exitT },
         transition: t,
       };
-    case 'push-down':
+    }
+    case 'push-down': {
+      const exitT = { duration: dur * 0.7, ease };
       return {
         initial: { y: '-100vh' },
         animate: { y: 0 },
-        exit: { y: '100vh' },
+        exit: { y: '100vh', transition: exitT },
         transition: t,
       };
+    }
 
     // Wipe: only the entering page animates; clip-path expands across the
     // viewport from the trailing edge. The exiting page is fully visible
