@@ -1,250 +1,222 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font-open-runde), ui-rounded, ui-sans-serif, system-ui,
+    -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+/* Slate base palette (OKLCH). Light + dark via .dark class. */
 :root {
-  --bg: #ffffff;
-  --text: #111111;
-  --text-dim: #6e6e6e;
-  --text-muted: #9a9a9a;
-  --border: #ebebeb;
-  --code-bg: #f6f6f6;
-  --code-border: #ececec;
-  --link-underline: #d4d4d4;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.129 0.042 264.695);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.129 0.042 264.695);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.129 0.042 264.695);
+  --primary: oklch(0.208 0.042 265.755);
+  --primary-foreground: oklch(0.984 0.003 247.858);
+  --secondary: oklch(0.968 0.007 247.896);
+  --secondary-foreground: oklch(0.208 0.042 265.755);
+  --muted: oklch(0.968 0.007 247.896);
+  --muted-foreground: oklch(0.554 0.046 257.417);
+  --accent: oklch(0.968 0.007 247.896);
+  --accent-foreground: oklch(0.208 0.042 265.755);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.929 0.013 255.508);
+  --input: oklch(0.929 0.013 255.508);
+  --ring: oklch(0.704 0.04 256.788);
+  --radius: 0.625rem;
 }
 
-* {
-  box-sizing: border-box;
+.dark {
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.208 0.042 265.755);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.551 0.027 264.364);
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    system-ui, sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: 'cv11', 'ss01';
-  text-rendering: optimizeLegibility;
-}
-
-body {
-  min-height: 100vh;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-  border-bottom: 1px solid var(--link-underline);
-  padding-bottom: 1px;
-  transition: border-color 100ms ease;
-}
-
-a:hover {
-  border-bottom-color: var(--text);
-}
-
-code,
-pre,
-kbd {
-  font-family: var(--font-mono), ui-monospace, SFMono-Regular, 'SF Mono',
-    Menlo, Consolas, monospace;
-  font-size: 0.93em;
-}
-
-p {
-  margin: 0 0 1em;
-}
-
-p:last-child {
-  margin-bottom: 0;
-}
-
-h1,
-h2,
-h3 {
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  margin: 0;
-}
-
-.page {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 88px 28px 120px;
-}
-
-.hero {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 28px;
-}
-
-.hero-title {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.hero-meta {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-  font-size: 13px;
-  color: var(--text-dim);
-}
-
-.hero-version {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 12.5px;
-  padding: 3px 7px;
-  border: 1px solid var(--border);
-  background: #fafafa;
-}
-
-.tagline {
-  font-size: 17px;
-  color: var(--text);
-  letter-spacing: -0.01em;
-  margin-bottom: 28px;
-}
-
-.intro {
-  color: var(--text-dim);
-  margin-bottom: 56px;
-}
-
-.section {
-  margin-bottom: 48px;
-}
-
-.section-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted);
-  margin-bottom: 14px;
-  letter-spacing: 0.01em;
-}
-
-.feature-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 14px;
-}
-
-.feature-list li {
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 20px;
-  align-items: baseline;
-  padding-bottom: 14px;
-  border-bottom: 1px dashed var(--border);
-}
-
-.feature-list li:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.feature-list strong {
-  font-weight: 500;
-  color: var(--text);
-}
-
-.feature-list span {
-  color: var(--text-dim);
-}
-
-.code-block {
-  background: var(--code-bg);
-  border: 1px solid var(--code-border);
-  padding: 16px 18px;
-  margin: 0 0 16px;
-  white-space: pre;
-  overflow-x: auto;
-  font-size: 13.5px;
-  line-height: 1.7;
-}
-
-.code-block.terminal::before {
-  content: '$';
-  color: var(--text-muted);
-  margin-right: 10px;
-  user-select: none;
-}
-
-.code-block.terminal {
-  white-space: nowrap;
-}
-
-.preset-grid,
-.kbd-grid {
-  display: grid;
-  gap: 12px;
-}
-
-.preset-grid li,
-.kbd-grid li {
-  display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 20px;
-  align-items: baseline;
-  list-style: none;
-}
-
-.preset-grid code,
-.kbd-grid kbd {
-  color: var(--text);
-}
-
-.kbd-grid kbd {
-  background: var(--code-bg);
-  border: 1px solid var(--code-border);
-  padding: 2px 8px;
-  font-size: 12.5px;
-}
-
-.easing-grid {
-  color: var(--text-dim);
-}
-
-.easing-grid code {
-  color: var(--text);
-}
-
-.footer {
-  margin-top: 80px;
-  padding-top: 28px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  color: var(--text-dim);
-}
-
-.footer-links {
-  display: flex;
-  gap: 18px;
-}
-
-@media (max-width: 600px) {
-  .page {
-    padding: 56px 20px 96px;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-  .feature-list li,
-  .preset-grid li,
-  .kbd-grid li {
-    grid-template-columns: 1fr;
-    gap: 4px;
+  body {
+    @apply bg-background text-foreground;
   }
-  .hero {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Skeuomorphic embossed-button treatment (ShinCN btn-classic).
+   Layered shadows + ::after gradient pseudo-element produce a raised look. */
+@layer components {
+  .btn-classic {
+    position: relative;
+    z-index: 0;
+    background-clip: border-box !important;
+    background-image:
+      linear-gradient(to bottom, transparent 50%, oklch(0 0 0 / 0.04)),
+      linear-gradient(to bottom, transparent 50%, var(--btn-classic-bg, transparent) 80%);
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.12),
+      inset 0 0 0 1px var(--btn-classic-bg, transparent),
+      0 1px 2px 0 oklch(0 0 0 / 0.06),
+      0 1px 3px 0 oklch(0 0 0 / 0.04);
+  }
+  .btn-classic::after {
+    content: "";
+    position: absolute;
+    border-radius: inherit;
+    pointer-events: none;
+    inset: 0;
+    z-index: 1;
+    border: 1px solid transparent;
+    background-clip: content-box;
+    background-image: linear-gradient(
+      oklch(0 0 0 / 0.02),
+      transparent 40%,
+      oklch(1 0 0 / 0.06)
+    );
+    box-shadow: inset 0 2px 3px -1px oklch(1 0 0 / 0.12);
+    transition:
+      background-color 150ms ease,
+      background-image 150ms ease,
+      box-shadow 150ms ease;
+  }
+  .btn-classic > * {
+    position: relative;
+    z-index: 2;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-classic:hover:not(:disabled, [data-disabled])::after {
+      background-image: linear-gradient(
+        oklch(0 0 0 / 0.04) -15%,
+        transparent 40%,
+        oklch(1 0 0 / 0.08)
+      );
+    }
+    .btn-classic-primary:hover:not(:disabled, [data-disabled])::after,
+    .btn-classic-destructive:hover:not(:disabled, [data-disabled])::after {
+      background-color: oklch(1 0 0 / 0.1);
+      background-image: linear-gradient(
+        oklch(1 0 0 / 0.14),
+        oklch(1 0 0 / 0.05) 40%,
+        transparent 60%,
+        oklch(0 0 0 / 0.03)
+      );
+      box-shadow:
+        inset 0 1px 2px 0 oklch(1 0 0 / 0.25),
+        inset 0 -1px 2px 0 oklch(0 0 0 / 0.1);
+    }
+  }
+  .btn-classic:active:not(:disabled, [data-disabled]) {
+    background-image: linear-gradient(oklch(0 0 0 / 0.03), transparent);
+    box-shadow:
+      inset 0 4px 2px -2px oklch(0 0 0 / 0.06),
+      inset 0 1px 1px oklch(0 0 0 / 0.08),
+      inset 0 0 0 1px oklch(0 0 0 / 0.05),
+      inset 0 0 0 1px var(--btn-classic-bg, transparent),
+      inset 0 3px 2px oklch(0 0 0 / 0.04);
+    padding-top: 1px;
+  }
+  .btn-classic:active:not(:disabled, [data-disabled])::after {
+    box-shadow: none;
+    background-image: linear-gradient(
+      oklch(0 0 0 / 0.04),
+      transparent 40%,
+      oklch(1 0 0 / 0.06)
+    );
+  }
+  .btn-classic-primary {
+    --btn-classic-bg: var(--primary);
+    background-image:
+      linear-gradient(to bottom, transparent 50%, oklch(0 0 0 / 0.15)),
+      linear-gradient(to bottom, transparent 50%, var(--primary) 80%);
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.25),
+      inset 0 0 0 1px var(--primary),
+      inset 0 -1px 0 0 oklch(0 0 0 / 0.2),
+      0 1px 3px 0 oklch(0 0 0 / 0.12),
+      0 2px 6px 0 oklch(0 0 0 / 0.08);
+  }
+  .btn-classic-primary::after {
+    background-image: linear-gradient(
+      oklch(1 0 0 / 0.1),
+      oklch(1 0 0 / 0.03) 40%,
+      transparent 60%,
+      oklch(0 0 0 / 0.05)
+    );
+    box-shadow:
+      inset 0 1px 2px 0 oklch(1 0 0 / 0.2),
+      inset 0 -1px 2px 0 oklch(0 0 0 / 0.15);
+  }
+  .btn-classic-outline {
+    --btn-classic-bg: var(--background);
+    background-image: linear-gradient(
+      to bottom,
+      transparent 50%,
+      oklch(0 0 0 / 0.02)
+    );
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.6),
+      0 1px 2px 0 oklch(0 0 0 / 0.05),
+      0 0 0 1px var(--border);
+  }
+  .btn-classic-outline::after {
+    box-shadow: inset 0 2px 3px -1px oklch(1 0 0 / 0.3);
+  }
+  .btn-classic-secondary {
+    --btn-classic-bg: var(--secondary);
+    background-image: linear-gradient(
+      to bottom,
+      transparent 50%,
+      oklch(0 0 0 / 0.02)
+    );
+    box-shadow:
+      inset 0 1px 0 0 oklch(1 0 0 / 0.5),
+      0 1px 2px 0 oklch(0 0 0 / 0.04),
+      0 0 0 1px oklch(0 0 0 / 0.06);
+  }
+  .btn-classic-secondary::after {
+    box-shadow: inset 0 2px 3px -1px oklch(1 0 0 / 0.25);
   }
 }

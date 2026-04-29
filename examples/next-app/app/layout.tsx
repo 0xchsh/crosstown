@@ -1,18 +1,34 @@
 import type { ReactNode } from 'react';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import { Crosstown } from 'crosstown';
 import { Agentation } from 'agentation';
+import { cn } from '@/lib/utils';
 import './globals.css';
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-const mono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
+const openRunde = localFont({
+  src: [
+    {
+      path: '../public/fonts/open-runde/OpenRunde-Regular.woff2',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: '../public/fonts/open-runde/OpenRunde-Medium.woff2',
+      weight: '500',
+      style: 'normal',
+    },
+    {
+      path: '../public/fonts/open-runde/OpenRunde-Semibold.woff2',
+      weight: '600',
+      style: 'normal',
+    },
+    {
+      path: '../public/fonts/open-runde/OpenRunde-Bold.woff2',
+      weight: '700',
+      style: 'normal',
+    },
+  ],
+  variable: '--font-open-runde',
   display: 'swap',
 });
 
@@ -24,7 +40,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${mono.variable}`}>
+    <html lang="en" className={cn(openRunde.variable, 'font-sans')}>
       <body>
         <Crosstown>{children}</Crosstown>
         {process.env.NODE_ENV === 'development' && <Agentation />}
