@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Crosstown } from 'crosstown';
+import { Agentation } from 'agentation';
 import './globals.css';
 
 const inter = Inter({
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={`${inter.variable} ${mono.variable}`}>
       <body>
         <Crosstown>{children}</Crosstown>
+        {process.env.NODE_ENV === 'development' && <Agentation />}
       </body>
     </html>
   );

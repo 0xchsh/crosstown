@@ -3,7 +3,11 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
+  useRef,
   useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
 import {
@@ -20,6 +24,49 @@ import {
   type TransitionConfig,
   type TransitionPreset,
 } from './types';
+
+type Corner = 'br' | 'bl' | 'tr' | 'tl';
+const POSITION_KEY = 'crosstown:position';
+const DRAG_THRESHOLD_PX = 5;
+const CORNER_INSET_PX = 16;
+
+function loadCorner(): Corner {
+  if (typeof window === 'undefined') return 'br';
+  try {
+    const v = window.localStorage.getItem(POSITION_KEY);
+    return v === 'br' || v === 'bl' || v === 'tr' || v === 'tl' ? v : 'br';
+  } catch {
+    return 'br';
+  }
+}
+
+function saveCornerToStorage(c: Corner): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(POSITION_KEY, c);
+  } catch {
+    /* swallow */
+  }
+}
+
+function nearestCorner(x: number, y: number): Corner {
+  const right = x > window.innerWidth / 2;
+  const bottom = y > window.innerHeight / 2;
+  return `${bottom ? 'b' : 't'}${right ? 'r' : 'l'}` as Corner;
+}
+
+function cornerStyle(c: Corner): CSSProperties {
+  switch (c) {
+    case 'br':
+      return { bottom: CORNER_INSET_PX, right: CORNER_INSET_PX, top: 'auto', left: 'auto' };
+    case 'bl':
+      return { bottom: CORNER_INSET_PX, left: CORNER_INSET_PX, top: 'auto', right: 'auto' };
+    case 'tr':
+      return { top: CORNER_INSET_PX, right: CORNER_INSET_PX, bottom: 'auto', left: 'auto' };
+    case 'tl':
+      return { top: CORNER_INSET_PX, left: CORNER_INSET_PX, bottom: 'auto', right: 'auto' };
+  }
+}
 
 const PRESET_LABELS: Record<TransitionPreset, string> = {
   crossfade: 'Crossfade',
@@ -72,10 +119,20 @@ export function Toolbar() {
   const [expanded, setExpanded] = useState(false);
   const [config, setConfig] = useState<TransitionConfig>(DEFAULT_CONFIG);
   const [copied, setCopied] = useState(false);
+  const [corner, setCorner] = useState<Corner>('br');
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    pillW: number;
+    pillH: number;
+    didDrag: boolean;
+  }>({ startX: 0, startY: 0, pillW: 0, pillH: 0, didDrag: false });
 
   useEffect(() => {
     const stored = loadConfig();
     if (stored) setConfig(stored);
+    setCorner(loadCorner());
     setHydrated(true);
     return subscribeConfigChange((next) => {
       setConfig(next ?? DEFAULT_CONFIG);
@@ -120,15 +177,88 @@ export function Toolbar() {
     }
   }, [config]);
 
+  // Pill drag-to-reposition. We track movement past a 5px threshold to
+  // distinguish "click to expand" from "drag to move." On release we snap
+  // to the nearest of the four screen corners and persist that choice.
+  const onPillPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      dragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        pillW: rect.width,
+        pillH: rect.height,
+        didDrag: false,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    [],
+  );
+  const onPillPointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>) => {
+      const { startX, startY, pillW, pillH, didDrag } = dragRef.current;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (!didDrag && Math.hypot(dx, dy) <= DRAG_THRESHOLD_PX) return;
+      if (!didDrag) dragRef.current.didDrag = true;
+      setDragPos({
+        x: e.clientX - pillW / 2,
+        y: e.clientY - pillH / 2,
+      });
+    },
+    [],
+  );
+  const onPillPointerUp = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (dragRef.current.didDrag) {
+        const c = nearestCorner(e.clientX, e.clientY);
+        setCorner(c);
+        saveCornerToStorage(c);
+        setDragPos(null);
+        // Click event would fire after pointerup — bail out via the ref check
+        // in onPillClick.
+      }
+    },
+    [],
+  );
+  const onPillClick = useCallback(() => {
+    if (dragRef.current.didDrag) {
+      dragRef.current.didDrag = false;
+      return;
+    }
+    setExpanded(true);
+  }, []);
+
+  const containerStyle: CSSProperties = useMemo(() => {
+    if (dragPos) {
+      return {
+        ...styles.container,
+        top: dragPos.y,
+        left: dragPos.x,
+        bottom: 'auto',
+        right: 'auto',
+      };
+    }
+    return { ...styles.container, ...cornerStyle(corner) };
+  }, [corner, dragPos]);
+
   if (!hydrated) return null;
 
   if (!expanded) {
     return (
-      <div style={styles.container}>
+      <div style={containerStyle}>
         <Pressable
-          style={styles.pill}
-          onClick={() => setExpanded(true)}
-          aria-label="Open Crosstown toolbar"
+          style={
+            dragPos
+              ? { ...styles.pill, cursor: 'grabbing' }
+              : { ...styles.pill, cursor: 'grab' }
+          }
+          onClick={onPillClick}
+          onPointerDown={onPillPointerDown}
+          onPointerMove={onPillPointerMove}
+          onPointerUp={onPillPointerUp}
+          onPointerCancel={onPillPointerUp}
+          aria-label="Crosstown toolbar — click to open, drag to reposition"
           title="Crosstown — ⌘⇧T"
         >
           <span style={styles.pillDot} />
@@ -141,7 +271,7 @@ export function Toolbar() {
   }
 
   return (
-    <div style={styles.container} role="dialog" aria-label="Crosstown toolbar">
+    <div style={containerStyle} role="dialog" aria-label="Crosstown toolbar">
       <div style={styles.panel}>
         <div style={styles.header}>
           <span style={styles.title}>Crosstown</span>

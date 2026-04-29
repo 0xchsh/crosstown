@@ -183,8 +183,7 @@ h3 {
 }
 
 .preset-grid,
-.kbd-grid,
-.easing-grid {
+.kbd-grid {
   display: grid;
   gap: 12px;
 }
