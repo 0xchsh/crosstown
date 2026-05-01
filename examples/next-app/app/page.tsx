@@ -110,7 +110,7 @@ export default function RootLayout({ children }) {
         <ul className="space-y-3">
           <li className="grid grid-cols-[180px_1fr] items-baseline gap-5">
             <kbd className="inline-flex w-fit items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs">
-              ⌘ ⇧ T
+              ⌘ ⇧ C
             </kbd>
             <span className="text-muted-foreground">
               Toggle the toolbar (Mac).
@@ -118,7 +118,7 @@ export default function RootLayout({ children }) {
           </li>
           <li className="grid grid-cols-[180px_1fr] items-baseline gap-5">
             <kbd className="inline-flex w-fit items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs">
-              Ctrl ⇧ T
+              Ctrl ⇧ C
             </kbd>
             <span className="text-muted-foreground">
               Toggle the toolbar (Windows / Linux).

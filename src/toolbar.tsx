@@ -12,7 +12,14 @@ import {
   type ReactNode,
 } from 'react';
 import {
-  clearConfig,
+  CaretLeft,
+  CaretRight,
+  Clock,
+  DiceFive,
+  Gear,
+  X as XIcon,
+} from '@phosphor-icons/react';
+import {
   dispatchReplay,
   loadConfig,
   saveConfig,
@@ -21,23 +28,23 @@ import {
 import { styles } from './toolbar-styles';
 import {
   DEFAULT_CONFIG,
-  type EasingName,
   type TransitionConfig,
   type TransitionPreset,
 } from './types';
 
-const EASINGS: EasingName[] = [
-  'linear',
-  'easeIn',
-  'easeOut',
-  'easeInOut',
-  'standard',
-  'emphasized',
-  'decelerate',
-  'accelerate',
-];
-
 const VERSION = '0.1.0';
+
+// Common transition durations: snappy, default, considered, theatrical, max.
+// Click to snap. The slider stays free-form between them.
+const DURATION_PRESETS = [150, 300, 500, 800, 1200] as const;
+
+// Only enable hover effects on devices that actually have hover (mouse/pen).
+// On touch, mouseenter fires on tap-down which would flash the hover state.
+const HOVER_CAPABLE =
+  typeof window !== 'undefined' &&
+  window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+const ANIM_EASE = 'cubic-bezier(0.23, 1, 0.32, 1)';
 
 interface Position {
   x: number;
@@ -132,7 +139,12 @@ const PRESETS: TransitionPreset[] = [
 export function Toolbar() {
   const [hydrated, setHydrated] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [expandedEntered, setExpandedEntered] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [durationOpen, setDurationOpen] = useState(false);
+  const [durationEntered, setDurationEntered] = useState(false);
+  const [settingsEntered, setSettingsEntered] = useState(false);
+  const [diceSpin, setDiceSpin] = useState(0);
   const [config, setConfig] = useState<TransitionConfig>(DEFAULT_CONFIG);
   const [copied, setCopied] = useState(false);
   const [position, setPosition] = useState<Position | null>(null);
@@ -144,6 +156,7 @@ export function Toolbar() {
     pillH: number;
     didDrag: boolean;
   }>({ startX: 0, startY: 0, pillW: 0, pillH: 0, didDrag: false });
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const stored = loadConfig();
@@ -159,7 +172,7 @@ export function Toolbar() {
     const handler = (e: KeyboardEvent) => {
       const isMac = navigator.platform.toLowerCase().includes('mac');
       const mod = isMac ? e.metaKey : e.ctrlKey;
-      if (mod && e.shiftKey && e.code === 'KeyT') {
+      if (mod && e.shiftKey && e.code === 'KeyC') {
         e.preventDefault();
         setExpanded((v) => !v);
       }
@@ -168,10 +181,68 @@ export function Toolbar() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Always open the panel to the main view, never to settings.
+  // Collapsing the toolbar dismisses any open popovers.
   useEffect(() => {
-    if (!expanded) setSettingsOpen(false);
+    if (!expanded) {
+      setSettingsOpen(false);
+      setDurationOpen(false);
+    }
   }, [expanded]);
+
+  // Origin-aware popover entrance: render at scale(0.96)/opacity:0 for one
+  // frame, then transition to scale(1)/opacity:1. Avoids the "appears from
+  // nothing" feel that a scale(0) → scale(1) animation has.
+  useEffect(() => {
+    if (durationOpen) {
+      const id = requestAnimationFrame(() => setDurationEntered(true));
+      return () => cancelAnimationFrame(id);
+    }
+    setDurationEntered(false);
+  }, [durationOpen]);
+
+  useEffect(() => {
+    if (settingsOpen) {
+      const id = requestAnimationFrame(() => setSettingsEntered(true));
+      return () => cancelAnimationFrame(id);
+    }
+    setSettingsEntered(false);
+  }, [settingsOpen]);
+
+  // Pill → bar entrance: render the bar at scale(0.96)/opacity:0 for one frame,
+  // then transition into place. Collapse is instant (the user's intent is
+  // unambiguous — animating out would feel laggy).
+  useEffect(() => {
+    if (expanded) {
+      const id = requestAnimationFrame(() => setExpandedEntered(true));
+      return () => cancelAnimationFrame(id);
+    }
+    setExpandedEntered(false);
+  }, [expanded]);
+
+  // Click-outside / Escape closes both popovers. Clicks inside the container
+  // (including the bar buttons and the popovers themselves) are ignored — each
+  // bar button decides for itself whether opening one popover should close the
+  // other.
+  useEffect(() => {
+    if (!durationOpen && !settingsOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (containerRef.current?.contains(e.target as Node)) return;
+      setDurationOpen(false);
+      setSettingsOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setDurationOpen(false);
+        setSettingsOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [durationOpen, settingsOpen]);
 
   const commit = useCallback((next: TransitionConfig) => {
     setConfig(next);
@@ -180,11 +251,6 @@ export function Toolbar() {
 
   const updateLocal = useCallback((patch: Partial<TransitionConfig>) => {
     setConfig((c) => ({ ...c, ...patch }));
-  }, []);
-
-  const handleReset = useCallback(() => {
-    clearConfig();
-    setConfig(DEFAULT_CONFIG);
   }, []);
 
   const stepPreset = useCallback(
@@ -201,6 +267,7 @@ export function Toolbar() {
   );
 
   const handleRandomize = useCallback(() => {
+    setDiceSpin((s) => s + 360);
     setConfig((c) => {
       // Avoid landing on the same preset twice in a row — feels broken otherwise.
       const others = PRESETS.filter((p) => p !== c.preset);
@@ -292,10 +359,73 @@ export function Toolbar() {
     setExpanded(true);
   }, []);
 
+  // Drag-to-reposition the expanded panel. Only fires when the pointerdown
+  // lands on a non-interactive surface (panel padding / row gaps); clicks on
+  // buttons, the select, or popovers fall through to their own handlers. We
+  // store the cursor's offset within the panel so the grab point stays under
+  // the finger instead of jumping to the panel center.
+  const panelOffsetRef = useRef({ x: 0, y: 0 });
+  const onPanelPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('button, select, input, a, label')) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      panelOffsetRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+      dragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        pillW: rect.width,
+        pillH: rect.height,
+        didDrag: false,
+      };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    },
+    [],
+  );
+  const onPanelPointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+      const { startX, startY, pillW, pillH, didDrag } = dragRef.current;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (!didDrag && Math.hypot(dx, dy) <= DRAG_THRESHOLD_PX) return;
+      if (!didDrag) {
+        dragRef.current.didDrag = true;
+        setIsDragging(true);
+      }
+      const { x: ox, y: oy } = panelOffsetRef.current;
+      setPosition(
+        clampToViewport(e.clientX - ox, e.clientY - oy, pillW, pillH),
+      );
+    },
+    [],
+  );
+  const onPanelPointerUp = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (!dragRef.current.didDrag) return;
+      const { pillW, pillH } = dragRef.current;
+      const { x: ox, y: oy } = panelOffsetRef.current;
+      const next = clampToViewport(
+        e.clientX - ox,
+        e.clientY - oy,
+        pillW,
+        pillH,
+      );
+      setPosition(next);
+      savePosition(next);
+      setIsDragging(false);
+      dragRef.current.didDrag = false;
+    },
+    [],
+  );
+
   // When the panel expands, its bounds are much larger than the pill's, so a
   // pill position near a viewport edge can leave the panel clipped. Measure
   // after layout and shift the panel into the viewport before paint.
-  const containerRef = useRef<HTMLDivElement>(null);
   const [panelClamp, setPanelClamp] = useState<Position | null>(null);
 
   useLayoutEffect(() => {
@@ -347,7 +477,7 @@ export function Toolbar() {
           onPointerUp={onPillPointerUp}
           onPointerCancel={onPillPointerUp}
           aria-label="Crosstown toolbar — click to open, drag to reposition"
-          title="Crosstown — ⌘⇧T"
+          title="Crosstown — ⌘⇧C"
         >
           <span style={styles.pillDot} />
           <span>
@@ -365,160 +495,177 @@ export function Toolbar() {
       role="dialog"
       aria-label="Crosstown toolbar"
     >
-      <div style={styles.panel}>
-        <div style={styles.header}>
-          {settingsOpen ? (
-            <span style={styles.title}>Settings</span>
-          ) : (
-            <span aria-hidden="true" />
-          )}
+      {durationOpen && (
+        <div
+          style={{
+            ...styles.popover,
+            ...styles.popoverAnimate,
+            transformOrigin: 'bottom left',
+            transform: durationEntered ? 'scale(1)' : 'scale(0.96)',
+            opacity: durationEntered ? 1 : 0,
+          }}
+          role="dialog"
+          aria-label="Duration"
+        >
+          <div style={styles.durationChips}>
+            {DURATION_PRESETS.map((ms) => (
+              <Pressable
+                key={ms}
+                style={
+                  ms === config.duration
+                    ? { ...styles.durationChip, ...styles.durationChipActive }
+                    : styles.durationChip
+                }
+                onClick={() => commit({ ...config, duration: ms })}
+                aria-pressed={ms === config.duration}
+                aria-label={`${ms} milliseconds`}
+              >
+                {ms}ms
+              </Pressable>
+            ))}
+          </div>
+        </div>
+      )}
+      {settingsOpen && (
+        <div
+          style={{
+            ...styles.popover,
+            ...styles.popoverNarrow,
+            ...styles.popoverAnimate,
+            transformOrigin: 'bottom right',
+            transform: settingsEntered ? 'scale(1)' : 'scale(0.96)',
+            opacity: settingsEntered ? 1 : 0,
+          }}
+          role="dialog"
+          aria-label="Settings"
+        >
+          <SettingsView />
+        </div>
+      )}
+      <div
+        style={{
+          ...styles.panel,
+          cursor: isDragging ? 'grabbing' : 'grab',
+          transformOrigin: 'bottom right',
+          transform: expandedEntered ? 'scale(1)' : 'scale(0.96)',
+          opacity: expandedEntered ? 1 : 0,
+          transition: `transform 180ms ${ANIM_EASE}, opacity 180ms ${ANIM_EASE}`,
+        }}
+        onPointerDown={onPanelPointerDown}
+        onPointerMove={onPanelPointerMove}
+        onPointerUp={onPanelPointerUp}
+        onPointerCancel={onPanelPointerUp}
+      >
+        <div style={styles.barRow}>
           <Pressable
-            style={styles.iconButton}
-            onClick={() =>
-              settingsOpen ? setSettingsOpen(false) : setExpanded(false)
-            }
-            aria-label={
-              settingsOpen ? 'Close settings' : 'Close Crosstown toolbar'
-            }
-            title={settingsOpen ? 'Back' : 'Close (⌘⇧T)'}
+            style={styles.barStepButton}
+            onClick={() => stepPreset(-1)}
+            aria-label="Previous preset"
+            title="Previous preset"
           >
-            <CloseIcon />
+            <ChevronLeftIcon />
+          </Pressable>
+          <select
+            style={styles.barPresetPill}
+            value={config.preset}
+            onChange={(e) =>
+              commit({
+                ...config,
+                preset: e.target.value as TransitionPreset,
+              })
+            }
+            aria-label="Preset"
+          >
+            {PRESETS.map((p) => (
+              <option key={p} value={p}>
+                {PRESET_LABELS[p]}
+              </option>
+            ))}
+          </select>
+          <Pressable
+            style={styles.barStepButton}
+            onClick={() => stepPreset(1)}
+            aria-label="Next preset"
+            title="Next preset"
+          >
+            <ChevronRightIcon />
           </Pressable>
         </div>
-
-        {settingsOpen ? (
-          <SettingsView
-            config={config}
-            onEasingChange={(easing) => commit({ ...config, easing })}
-            onReset={handleReset}
-          />
-        ) : (
-          <>
-            <Row label="Preset">
-              <div style={styles.presetStepper}>
-                <Pressable
-                  style={styles.stepButton}
-                  onClick={() => stepPreset(-1)}
-                  aria-label="Previous preset"
-                  title="Previous preset"
-                >
-                  <span aria-hidden="true">‹</span>
-                </Pressable>
-                <select
-                  style={{ ...styles.select, flex: 1 }}
-                  value={config.preset}
-                  onChange={(e) =>
-                    commit({
-                      ...config,
-                      preset: e.target.value as TransitionPreset,
-                    })
-                  }
-                >
-                  {PRESETS.map((p) => (
-                    <option key={p} value={p}>
-                      {PRESET_LABELS[p]}
-                    </option>
-                  ))}
-                </select>
-                <Pressable
-                  style={styles.stepButton}
-                  onClick={() => stepPreset(1)}
-                  aria-label="Next preset"
-                  title="Next preset"
-                >
-                  <span aria-hidden="true">›</span>
-                </Pressable>
-              </div>
-            </Row>
-
-            <SliderRow
-              label="Duration"
-              valueLabel={`${config.duration}ms`}
-              min={0}
-              max={1200}
-              step={25}
-              value={config.duration}
-              onLive={(v) => updateLocal({ duration: v })}
-              onCommit={(v) => commit({ ...config, duration: v })}
-            />
-
-            <div style={styles.actionRow}>
-              <Pressable
-                style={styles.iconActionButton}
-                onClick={handleRandomize}
-                aria-label="Random preset"
-                title="Random preset"
-              >
-                <DiceIcon />
-              </Pressable>
-              <Pressable
-                style={styles.iconActionButton}
-                onClick={dispatchReplay}
-                aria-label="Replay current transition"
-                title="Replay"
-              >
-                <PlayIcon />
-              </Pressable>
-              <Pressable
-                style={
-                  copied
-                    ? { ...styles.copyButton, ...styles.copyButtonCopied }
-                    : styles.copyButton
-                }
-                onClick={handleCopy}
-                aria-label="Copy config-first prompt to clipboard"
-              >
-                {copied ? 'Copied' : 'Copy prompt'}
-              </Pressable>
-              <span style={styles.actionDivider} aria-hidden="true" />
-              <Pressable
-                style={styles.iconActionButton}
-                onClick={() => setSettingsOpen(true)}
-                aria-label="Open settings"
-                title="Settings"
-              >
-                <SettingsIcon />
-              </Pressable>
-            </div>
-          </>
-        )}
+        <div style={styles.barRow}>
+          <Pressable
+            style={
+              durationOpen
+                ? { ...styles.barIconButton, ...styles.barIconButtonActive }
+                : styles.barIconButton
+            }
+            hoverStyle={durationOpen ? undefined : styles.barIconButtonHover}
+            onClick={() => {
+              setSettingsOpen(false);
+              setDurationOpen((v) => !v);
+            }}
+            aria-label="Duration"
+            aria-expanded={durationOpen}
+            title={`Duration (${config.duration}ms)`}
+          >
+            <ClockIcon />
+          </Pressable>
+          <Pressable
+            style={styles.barIconButton}
+            hoverStyle={styles.barIconButtonHover}
+            onClick={handleRandomize}
+            aria-label="Random preset"
+            title="Random preset"
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: 'inline-flex',
+                transform: `rotate(${diceSpin}deg)`,
+                transition:
+                  'transform 420ms cubic-bezier(0.23, 1, 0.32, 1)',
+              }}
+            >
+              <DiceIcon />
+            </span>
+          </Pressable>
+          <Pressable
+            style={
+              settingsOpen
+                ? { ...styles.barIconButton, ...styles.barIconButtonActive }
+                : styles.barIconButton
+            }
+            hoverStyle={settingsOpen ? undefined : styles.barIconButtonHover}
+            onClick={() => {
+              setDurationOpen(false);
+              setSettingsOpen((v) => !v);
+            }}
+            aria-label="Settings"
+            aria-expanded={settingsOpen}
+            title="Settings"
+          >
+            <SettingsIcon />
+          </Pressable>
+          <Pressable
+            style={
+              copied
+                ? { ...styles.barCopyButton, ...styles.barCopyButtonCopied }
+                : styles.barCopyButton
+            }
+            onClick={handleCopy}
+            aria-label="Copy config-first prompt to clipboard"
+          >
+            {copied ? 'Copied' : 'Copy Prompt'}
+          </Pressable>
+        </div>
       </div>
     </div>
   );
 }
 
-function SettingsView({
-  config,
-  onEasingChange,
-  onReset,
-}: {
-  config: TransitionConfig;
-  onEasingChange: (easing: EasingName) => void;
-  onReset: () => void;
-}) {
+function SettingsView() {
   return (
     <>
       <div style={styles.settingsRowFirst}>
-        <span style={styles.settingsLabel}>Easing</span>
-        <select
-          style={styles.settingsSelect}
-          value={config.easing}
-          onChange={(e) => onEasingChange(e.target.value as EasingName)}
-        >
-          {EASINGS.map((e) => (
-            <option key={e} value={e}>
-              {e}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div style={styles.settingsRow}>
-        <span style={styles.settingsLabel}>Reset to defaults</span>
-        <button type="button" onClick={onReset} style={styles.settingsLink}>
-          Reset
-        </button>
-      </div>
-      <div style={styles.settingsRow}>
         <span style={styles.settingsLabel}>Version</span>
         <span style={styles.settingsValue}>v{VERSION}</span>
       </div>
@@ -535,7 +682,7 @@ function SettingsView({
       </div>
       <div style={styles.settingsRow}>
         <span style={styles.settingsLabel}>Shortcut</span>
-        <span style={styles.settingsValue}>⌘⇧T</span>
+        <span style={styles.settingsValue}>⌘⇧C</span>
       </div>
     </>
   );
@@ -608,12 +755,15 @@ function SliderRow({
 // :active CSS — the transition smooths the un-press.
 function Pressable({
   style,
+  hoverStyle,
   children,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   style: React.CSSProperties;
+  hoverStyle?: React.CSSProperties;
 }) {
   const [pressed, setPressed] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const release = () => setPressed(false);
   return (
     <button
@@ -621,8 +771,13 @@ function Pressable({
       {...props}
       style={{
         ...style,
+        ...(HOVER_CAPABLE && hovered && hoverStyle ? hoverStyle : null),
         transform: pressed ? 'scale(0.97)' : 'scale(1)',
-        transition: 'transform 160ms cubic-bezier(0.2, 0, 0, 1)',
+        transition: `transform 160ms cubic-bezier(0.2, 0, 0, 1), background-color 120ms ${ANIM_EASE}`,
+      }}
+      onPointerEnter={(e) => {
+        setHovered(true);
+        props.onPointerEnter?.(e);
       }}
       onPointerDown={(e) => {
         setPressed(true);
@@ -637,6 +792,7 @@ function Pressable({
         props.onPointerCancel?.(e);
       }}
       onPointerLeave={(e) => {
+        setHovered(false);
         release();
         props.onPointerLeave?.(e);
       }}
@@ -646,73 +802,16 @@ function Pressable({
   );
 }
 
-// Inline SVG icons keep the package free of external icon dependencies and
-// render consistently across platforms (unlike unicode glyphs / emoji).
-const ICON_BASE = {
-  width: 14,
-  height: 14,
-  viewBox: '0 0 24 24',
-  fill: 'none',
-  stroke: 'currentColor',
-  strokeWidth: 2,
-  strokeLinecap: 'round' as const,
-  strokeLinejoin: 'round' as const,
-  'aria-hidden': true,
-};
+// All toolbar icons render with Phosphor's "fill" weight for a consistent,
+// solid-glyph look that matches the rest of the example app.
+const ICON_PROPS = { weight: 'fill' as const, size: 18, 'aria-hidden': true };
 
-function PlayIcon() {
-  return (
-    <svg
-      width={12}
-      height={12}
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <polygon points="6,4 20,12 6,20" />
-    </svg>
-  );
-}
-
-function ResetIcon() {
-  return (
-    <svg {...ICON_BASE}>
-      <path d="M3 12a9 9 0 1 0 3-6.7" />
-      <polyline points="3 4 3 9 8 9" />
-    </svg>
-  );
-}
-
-function DiceIcon() {
-  return (
-    <svg {...ICON_BASE}>
-      <rect x="3" y="3" width="18" height="18" rx="3" />
-      <circle cx="8.5" cy="8.5" r="1" fill="currentColor" stroke="none" />
-      <circle cx="15.5" cy="8.5" r="1" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
-      <circle cx="8.5" cy="15.5" r="1" fill="currentColor" stroke="none" />
-      <circle cx="15.5" cy="15.5" r="1" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg {...ICON_BASE}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg {...ICON_BASE}>
-      <line x1="6" y1="6" x2="18" y2="18" />
-      <line x1="18" y1="6" x2="6" y2="18" />
-    </svg>
-  );
-}
+const ChevronLeftIcon = () => <CaretLeft {...ICON_PROPS} size={16} />;
+const ChevronRightIcon = () => <CaretRight {...ICON_PROPS} size={16} />;
+const ClockIcon = () => <Clock {...ICON_PROPS} />;
+const DiceIcon = () => <DiceFive {...ICON_PROPS} />;
+const SettingsIcon = () => <Gear {...ICON_PROPS} />;
+const CloseIcon = () => <XIcon {...ICON_PROPS} size={14} />;
 
 function buildCopyPrompt(config: TransitionConfig): string {
   const literal = `{

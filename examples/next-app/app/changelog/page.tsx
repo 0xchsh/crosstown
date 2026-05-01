@@ -31,7 +31,7 @@ export default function Changelog() {
         <ChangeList
           items={[
             ['Fourteen presets', 'Crossfade, Fade Out & In, Slide L/U/R/D, Push L/U/R/D, Wipe L/U/R/D.'],
-            ['Dev toolbar', 'Bottom-right pill, expands to a tuning panel. ⌘⇧T toggles. Drag-to-reposition snaps to corners.'],
+            ['Dev toolbar', 'Bottom-right pill, expands to a tuning panel. ⌘⇧C toggles. Drag-to-reposition snaps to corners.'],
             ['Copy & bake', 'Click Copy to paste a config-first prompt into Claude Code.'],
             ['App Router only', 'Pages Router and Vite + React Router are tracked for v0.2.'],
           ]}
