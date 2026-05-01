@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -25,46 +26,71 @@ import {
   type TransitionPreset,
 } from './types';
 
-type Corner = 'br' | 'bl' | 'tr' | 'tl';
+const EASINGS: EasingName[] = [
+  'linear',
+  'easeIn',
+  'easeOut',
+  'easeInOut',
+  'standard',
+  'emphasized',
+  'decelerate',
+  'accelerate',
+];
+
+const VERSION = '0.1.0';
+
+interface Position {
+  x: number;
+  y: number;
+}
 const POSITION_KEY = 'crosstown:position';
 const DRAG_THRESHOLD_PX = 5;
-const CORNER_INSET_PX = 16;
+const VIEWPORT_MARGIN = 8;
 
-function loadCorner(): Corner {
-  if (typeof window === 'undefined') return 'br';
+function clampToViewport(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): Position {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const maxX = Math.max(VIEWPORT_MARGIN, vw - w - VIEWPORT_MARGIN);
+  const maxY = Math.max(VIEWPORT_MARGIN, vh - h - VIEWPORT_MARGIN);
+  return {
+    x: Math.max(VIEWPORT_MARGIN, Math.min(x, maxX)),
+    y: Math.max(VIEWPORT_MARGIN, Math.min(y, maxY)),
+  };
+}
+
+function loadPosition(): Position | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const v = window.localStorage.getItem(POSITION_KEY);
-    return v === 'br' || v === 'bl' || v === 'tr' || v === 'tl' ? v : 'br';
+    const raw = window.localStorage.getItem(POSITION_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      'x' in parsed &&
+      'y' in parsed &&
+      typeof (parsed as Position).x === 'number' &&
+      typeof (parsed as Position).y === 'number'
+    ) {
+      return parsed as Position;
+    }
+    return null;
   } catch {
-    return 'br';
+    return null;
   }
 }
 
-function saveCornerToStorage(c: Corner): void {
+function savePosition(p: Position): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(POSITION_KEY, c);
+    window.localStorage.setItem(POSITION_KEY, JSON.stringify(p));
   } catch {
     /* swallow */
-  }
-}
-
-function nearestCorner(x: number, y: number): Corner {
-  const right = x > window.innerWidth / 2;
-  const bottom = y > window.innerHeight / 2;
-  return `${bottom ? 'b' : 't'}${right ? 'r' : 'l'}` as Corner;
-}
-
-function cornerStyle(c: Corner): CSSProperties {
-  switch (c) {
-    case 'br':
-      return { bottom: CORNER_INSET_PX, right: CORNER_INSET_PX, top: 'auto', left: 'auto' };
-    case 'bl':
-      return { bottom: CORNER_INSET_PX, left: CORNER_INSET_PX, top: 'auto', right: 'auto' };
-    case 'tr':
-      return { top: CORNER_INSET_PX, right: CORNER_INSET_PX, bottom: 'auto', left: 'auto' };
-    case 'tl':
-      return { top: CORNER_INSET_PX, left: CORNER_INSET_PX, bottom: 'auto', right: 'auto' };
   }
 }
 
@@ -103,24 +129,14 @@ const PRESETS: TransitionPreset[] = [
   'wipe-down',
 ];
 
-const EASINGS: EasingName[] = [
-  'linear',
-  'easeIn',
-  'easeOut',
-  'easeInOut',
-  'standard',
-  'emphasized',
-  'decelerate',
-  'accelerate',
-];
-
 export function Toolbar() {
   const [hydrated, setHydrated] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [config, setConfig] = useState<TransitionConfig>(DEFAULT_CONFIG);
   const [copied, setCopied] = useState(false);
-  const [corner, setCorner] = useState<Corner>('br');
-  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const [position, setPosition] = useState<Position | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -132,7 +148,7 @@ export function Toolbar() {
   useEffect(() => {
     const stored = loadConfig();
     if (stored) setConfig(stored);
-    setCorner(loadCorner());
+    setPosition(loadPosition());
     setHydrated(true);
     return subscribeConfigChange((next) => {
       setConfig(next ?? DEFAULT_CONFIG);
@@ -152,6 +168,11 @@ export function Toolbar() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  // Always open the panel to the main view, never to settings.
+  useEffect(() => {
+    if (!expanded) setSettingsOpen(false);
+  }, [expanded]);
+
   const commit = useCallback((next: TransitionConfig) => {
     setConfig(next);
     saveConfig(next);
@@ -164,6 +185,30 @@ export function Toolbar() {
   const handleReset = useCallback(() => {
     clearConfig();
     setConfig(DEFAULT_CONFIG);
+  }, []);
+
+  const stepPreset = useCallback(
+    (delta: 1 | -1) => {
+      setConfig((c) => {
+        const i = PRESETS.indexOf(c.preset);
+        const next = PRESETS[(i + delta + PRESETS.length) % PRESETS.length];
+        const updated = { ...c, preset: next };
+        saveConfig(updated);
+        return updated;
+      });
+    },
+    [],
+  );
+
+  const handleRandomize = useCallback(() => {
+    setConfig((c) => {
+      // Avoid landing on the same preset twice in a row — feels broken otherwise.
+      const others = PRESETS.filter((p) => p !== c.preset);
+      const next = others[Math.floor(Math.random() * others.length)];
+      const updated = { ...c, preset: next };
+      saveConfig(updated);
+      return updated;
+    });
   }, []);
 
   const handleCopy = useCallback(async () => {
@@ -196,27 +241,45 @@ export function Toolbar() {
   );
   const onPillPointerMove = useCallback(
     (e: ReactPointerEvent<HTMLButtonElement>) => {
+      // pointermove fires on plain hover too — only respond while the pointer
+      // is captured (i.e., between pointerdown and pointerup).
+      if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
       const { startX, startY, pillW, pillH, didDrag } = dragRef.current;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       if (!didDrag && Math.hypot(dx, dy) <= DRAG_THRESHOLD_PX) return;
-      if (!didDrag) dragRef.current.didDrag = true;
-      setDragPos({
-        x: e.clientX - pillW / 2,
-        y: e.clientY - pillH / 2,
-      });
+      if (!didDrag) {
+        dragRef.current.didDrag = true;
+        setIsDragging(true);
+      }
+      setPosition(
+        clampToViewport(
+          e.clientX - pillW / 2,
+          e.clientY - pillH / 2,
+          pillW,
+          pillH,
+        ),
+      );
     },
     [],
   );
   const onPillPointerUp = useCallback(
     (e: ReactPointerEvent<HTMLButtonElement>) => {
       if (dragRef.current.didDrag) {
-        const c = nearestCorner(e.clientX, e.clientY);
-        setCorner(c);
-        saveCornerToStorage(c);
-        setDragPos(null);
-        // Click event would fire after pointerup — bail out via the ref check
-        // in onPillClick.
+        // Free-form positioning: stays exactly where dropped, no corner snap.
+        // Clamp so the pill can't be left straddling a viewport edge.
+        const { pillW, pillH } = dragRef.current;
+        const next = clampToViewport(
+          e.clientX - pillW / 2,
+          e.clientY - pillH / 2,
+          pillW,
+          pillH,
+        );
+        setPosition(next);
+        savePosition(next);
+        setIsDragging(false);
+        // Click event fires after pointerup — bail out via the ref check in
+        // onPillClick.
       }
     },
     [],
@@ -229,27 +292,52 @@ export function Toolbar() {
     setExpanded(true);
   }, []);
 
+  // When the panel expands, its bounds are much larger than the pill's, so a
+  // pill position near a viewport edge can leave the panel clipped. Measure
+  // after layout and shift the panel into the viewport before paint.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [panelClamp, setPanelClamp] = useState<Position | null>(null);
+
+  useLayoutEffect(() => {
+    if (!expanded || !position) {
+      setPanelClamp(null);
+      return;
+    }
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const next = clampToViewport(position.x, position.y, rect.width, rect.height);
+    setPanelClamp(
+      next.x === position.x && next.y === position.y ? null : next,
+    );
+    // Re-run when settingsOpen flips: switching views resizes the panel, so a
+    // stale clamp from the previous view can leave the new view overflowing.
+  }, [expanded, position, settingsOpen]);
+
   const containerStyle: CSSProperties = useMemo(() => {
-    if (dragPos) {
+    const effective = expanded ? panelClamp ?? position : position;
+    if (effective) {
       return {
         ...styles.container,
-        top: dragPos.y,
-        left: dragPos.x,
+        top: effective.y,
+        left: effective.x,
         bottom: 'auto',
         right: 'auto',
       };
     }
-    return { ...styles.container, ...cornerStyle(corner) };
-  }, [corner, dragPos]);
+    // No saved or active position — fall back to the default in styles.container
+    // (bottom-right with 16px inset).
+    return styles.container;
+  }, [position, panelClamp, expanded]);
 
   if (!hydrated) return null;
 
   if (!expanded) {
     return (
-      <div style={containerStyle}>
+      <div ref={containerRef} style={containerStyle}>
         <Pressable
           style={
-            dragPos
+            isDragging
               ? { ...styles.pill, cursor: 'grabbing' }
               : { ...styles.pill, cursor: 'grab' }
           }
@@ -271,94 +359,185 @@ export function Toolbar() {
   }
 
   return (
-    <div style={containerStyle} role="dialog" aria-label="Crosstown toolbar">
+    <div
+      ref={containerRef}
+      style={containerStyle}
+      role="dialog"
+      aria-label="Crosstown toolbar"
+    >
       <div style={styles.panel}>
         <div style={styles.header}>
-          <span style={styles.title}>Crosstown</span>
+          {settingsOpen ? (
+            <span style={styles.title}>Settings</span>
+          ) : (
+            <span aria-hidden="true" />
+          )}
           <Pressable
             style={styles.iconButton}
-            onClick={() => setExpanded(false)}
-            aria-label="Close Crosstown toolbar"
-            title="Close (⌘⇧T)"
+            onClick={() =>
+              settingsOpen ? setSettingsOpen(false) : setExpanded(false)
+            }
+            aria-label={
+              settingsOpen ? 'Close settings' : 'Close Crosstown toolbar'
+            }
+            title={settingsOpen ? 'Back' : 'Close (⌘⇧T)'}
           >
-            ×
+            <CloseIcon />
           </Pressable>
         </div>
 
-        <Row label="Preset">
-          <select
-            style={styles.select}
-            value={config.preset}
-            onChange={(e) =>
-              commit({ ...config, preset: e.target.value as TransitionPreset })
-            }
-          >
-            {PRESETS.map((p) => (
-              <option key={p} value={p}>
-                {PRESET_LABELS[p]}
-              </option>
-            ))}
-          </select>
-        </Row>
+        {settingsOpen ? (
+          <SettingsView
+            config={config}
+            onEasingChange={(easing) => commit({ ...config, easing })}
+            onReset={handleReset}
+          />
+        ) : (
+          <>
+            <Row label="Preset">
+              <div style={styles.presetStepper}>
+                <Pressable
+                  style={styles.stepButton}
+                  onClick={() => stepPreset(-1)}
+                  aria-label="Previous preset"
+                  title="Previous preset"
+                >
+                  <span aria-hidden="true">‹</span>
+                </Pressable>
+                <select
+                  style={{ ...styles.select, flex: 1 }}
+                  value={config.preset}
+                  onChange={(e) =>
+                    commit({
+                      ...config,
+                      preset: e.target.value as TransitionPreset,
+                    })
+                  }
+                >
+                  {PRESETS.map((p) => (
+                    <option key={p} value={p}>
+                      {PRESET_LABELS[p]}
+                    </option>
+                  ))}
+                </select>
+                <Pressable
+                  style={styles.stepButton}
+                  onClick={() => stepPreset(1)}
+                  aria-label="Next preset"
+                  title="Next preset"
+                >
+                  <span aria-hidden="true">›</span>
+                </Pressable>
+              </div>
+            </Row>
 
-        <SliderRow
-          label="Duration"
-          valueLabel={`${config.duration}ms`}
-          min={0}
-          max={1200}
-          step={25}
-          value={config.duration}
-          onLive={(v) => updateLocal({ duration: v })}
-          onCommit={(v) => commit({ ...config, duration: v })}
-        />
+            <SliderRow
+              label="Duration"
+              valueLabel={`${config.duration}ms`}
+              min={0}
+              max={1200}
+              step={25}
+              value={config.duration}
+              onLive={(v) => updateLocal({ duration: v })}
+              onCommit={(v) => commit({ ...config, duration: v })}
+            />
 
-        <Row label="Easing">
-          <select
-            style={styles.select}
-            value={config.easing}
-            onChange={(e) =>
-              commit({ ...config, easing: e.target.value as EasingName })
-            }
-          >
-            {EASINGS.map((eName) => (
-              <option key={eName} value={eName}>
-                {eName}
-              </option>
-            ))}
-          </select>
-        </Row>
-
-        <div style={styles.actionRow}>
-          <Pressable
-            style={styles.playButton}
-            onClick={dispatchReplay}
-            aria-label="Replay current transition"
-            title="Replay"
-          >
-            <span aria-hidden="true">▶</span>
-            <span>Play</span>
-          </Pressable>
-          <Pressable
-            style={
-              copied
-                ? { ...styles.copyButton, ...styles.copyButtonCopied }
-                : styles.copyButton
-            }
-            onClick={handleCopy}
-            aria-label="Copy config-first prompt to clipboard"
-          >
-            {copied ? 'Copied' : 'Copy prompt'}
-          </Pressable>
-        </div>
-
-        <div style={styles.footer}>
-          <button type="button" style={styles.resetLink} onClick={handleReset}>
-            Reset
-          </button>
-          <span style={styles.devLabel}>dev only</span>
-        </div>
+            <div style={styles.actionRow}>
+              <Pressable
+                style={styles.iconActionButton}
+                onClick={handleRandomize}
+                aria-label="Random preset"
+                title="Random preset"
+              >
+                <DiceIcon />
+              </Pressable>
+              <Pressable
+                style={styles.iconActionButton}
+                onClick={dispatchReplay}
+                aria-label="Replay current transition"
+                title="Replay"
+              >
+                <PlayIcon />
+              </Pressable>
+              <Pressable
+                style={
+                  copied
+                    ? { ...styles.copyButton, ...styles.copyButtonCopied }
+                    : styles.copyButton
+                }
+                onClick={handleCopy}
+                aria-label="Copy config-first prompt to clipboard"
+              >
+                {copied ? 'Copied' : 'Copy prompt'}
+              </Pressable>
+              <span style={styles.actionDivider} aria-hidden="true" />
+              <Pressable
+                style={styles.iconActionButton}
+                onClick={() => setSettingsOpen(true)}
+                aria-label="Open settings"
+                title="Settings"
+              >
+                <SettingsIcon />
+              </Pressable>
+            </div>
+          </>
+        )}
       </div>
     </div>
+  );
+}
+
+function SettingsView({
+  config,
+  onEasingChange,
+  onReset,
+}: {
+  config: TransitionConfig;
+  onEasingChange: (easing: EasingName) => void;
+  onReset: () => void;
+}) {
+  return (
+    <>
+      <div style={styles.settingsRowFirst}>
+        <span style={styles.settingsLabel}>Easing</span>
+        <select
+          style={styles.settingsSelect}
+          value={config.easing}
+          onChange={(e) => onEasingChange(e.target.value as EasingName)}
+        >
+          {EASINGS.map((e) => (
+            <option key={e} value={e}>
+              {e}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div style={styles.settingsRow}>
+        <span style={styles.settingsLabel}>Reset to defaults</span>
+        <button type="button" onClick={onReset} style={styles.settingsLink}>
+          Reset
+        </button>
+      </div>
+      <div style={styles.settingsRow}>
+        <span style={styles.settingsLabel}>Version</span>
+        <span style={styles.settingsValue}>v{VERSION}</span>
+      </div>
+      <div style={styles.settingsRow}>
+        <span style={styles.settingsLabel}>Repository</span>
+        <a
+          href="https://github.com/0xchsh/crosstown"
+          target="_blank"
+          rel="noreferrer"
+          style={styles.settingsLink}
+        >
+          GitHub ↗
+        </a>
+      </div>
+      <div style={styles.settingsRow}>
+        <span style={styles.settingsLabel}>Shortcut</span>
+        <span style={styles.settingsValue}>⌘⇧T</span>
+      </div>
+    </>
   );
 }
 
@@ -464,6 +643,74 @@ function Pressable({
     >
       {children}
     </button>
+  );
+}
+
+// Inline SVG icons keep the package free of external icon dependencies and
+// render consistently across platforms (unlike unicode glyphs / emoji).
+const ICON_BASE = {
+  width: 14,
+  height: 14,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+};
+
+function PlayIcon() {
+  return (
+    <svg
+      width={12}
+      height={12}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <polygon points="6,4 20,12 6,20" />
+    </svg>
+  );
+}
+
+function ResetIcon() {
+  return (
+    <svg {...ICON_BASE}>
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <polyline points="3 4 3 9 8 9" />
+    </svg>
+  );
+}
+
+function DiceIcon() {
+  return (
+    <svg {...ICON_BASE}>
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <circle cx="8.5" cy="8.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="15.5" cy="8.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="8.5" cy="15.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="15.5" cy="15.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg {...ICON_BASE}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg {...ICON_BASE}>
+      <line x1="6" y1="6" x2="18" y2="18" />
+      <line x1="18" y1="6" x2="6" y2="18" />
+    </svg>
   );
 }
 

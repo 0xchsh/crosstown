@@ -143,6 +143,30 @@ export const styles = {
     cursor: 'pointer',
   } as CSSProperties,
 
+  presetStepper: {
+    display: 'flex',
+    alignItems: 'stretch',
+    gap: 6,
+  } as CSSProperties,
+
+  stepButton: {
+    flex: '0 0 auto',
+    width: 32,
+    background: 'rgba(255, 255, 255, 0.06)',
+    border: `1px solid ${BORDER}`,
+    borderRadius: 8,
+    color: TEXT,
+    fontFamily: FONT,
+    fontSize: 16,
+    lineHeight: 1,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
+    userSelect: 'none',
+  } as CSSProperties,
+
   originPicker: {
     position: 'relative',
     width: '100%',
@@ -170,34 +194,44 @@ export const styles = {
 
   actionRow: {
     display: 'flex',
-    gap: 8,
+    alignItems: 'center',
+    gap: 6,
     marginTop: 2,
   } as CSSProperties,
 
-  playButton: {
+  iconActionButton: {
     flex: '0 0 auto',
+    width: 32,
+    height: 32,
     background: 'rgba(255, 255, 255, 0.06)',
     border: `1px solid ${BORDER}`,
     color: TEXT,
     fontFamily: FONT,
-    fontSize: 13,
-    padding: '8px 12px',
     borderRadius: 8,
     cursor: 'pointer',
-    fontWeight: 500,
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    padding: 0,
+    userSelect: 'none',
+  } as CSSProperties,
+
+  actionDivider: {
+    width: 1,
+    height: 18,
+    background: BORDER,
+    flex: '0 0 auto',
   } as CSSProperties,
 
   copyButton: {
     flex: 1,
+    height: 32,
     background: ACCENT,
     border: `1px solid ${ACCENT}`,
     color: 'white',
     fontFamily: FONT,
     fontSize: 13,
-    padding: '8px 12px',
+    padding: '0 12px',
     borderRadius: 8,
     cursor: 'pointer',
     fontWeight: 500,
@@ -235,5 +269,63 @@ export const styles = {
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
     fontWeight: 600,
+  } as CSSProperties,
+
+  settingsRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
+    borderTop: `1px solid ${BORDER}`,
+  } as CSSProperties,
+
+  settingsRowFirst: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingBottom: 8,
+  } as CSSProperties,
+
+  settingsLabel: {
+    fontSize: 13,
+    color: TEXT,
+    fontWeight: 500,
+  } as CSSProperties,
+
+  settingsValue: {
+    fontSize: 13,
+    color: TEXT_DIM,
+  } as CSSProperties,
+
+  settingsLink: {
+    background: 'transparent',
+    border: 'none',
+    padding: 0,
+    color: ACCENT,
+    fontFamily: FONT,
+    fontSize: 13,
+    cursor: 'pointer',
+    fontWeight: 500,
+  } as CSSProperties,
+
+  settingsSelect: {
+    appearance: 'none',
+    WebkitAppearance: 'none',
+    MozAppearance: 'none',
+    background: 'rgba(255, 255, 255, 0.06)',
+    border: `1px solid ${BORDER}`,
+    borderRadius: 8,
+    color: TEXT,
+    fontFamily: FONT,
+    fontSize: 13,
+    padding: '6px 28px 6px 10px',
+    cursor: 'pointer',
+    backgroundImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='rgba(255,255,255,0.55)' d='M5 6 0 0h10z'/%3E%3C/svg%3E\")",
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 10px center',
   } as CSSProperties,
 };

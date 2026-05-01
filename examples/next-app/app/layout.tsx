@@ -3,6 +3,7 @@ import localFont from 'next/font/local';
 import { Crosstown } from 'crosstown';
 import { Agentation } from 'agentation';
 import { cn } from '@/lib/utils';
+import { PageNav } from '@/components/page-nav';
 import './globals.css';
 
 const openRunde = localFont({
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={cn(openRunde.variable, 'font-sans')}>
       <body>
+        <PageNav />
         <Crosstown>{children}</Crosstown>
         {process.env.NODE_ENV === 'development' && <Agentation />}
       </body>

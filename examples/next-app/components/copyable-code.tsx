@@ -39,7 +39,7 @@ export function CopyableCode({
         aria-label={copied ? 'Copied' : 'Copy to clipboard'}
       >
         {copied ? (
-          <Check weight="bold" />
+          <Check weight="regular" />
         ) : (
           <Copy weight="regular" />
         )}

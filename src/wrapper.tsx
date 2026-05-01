@@ -58,14 +58,28 @@ export function Wrapper({ children, config }: WrapperProps) {
   useEffect(() => {
     if (config) return;
     setStoredConfig(loadConfig());
+    // Debounce replays from config changes: cycling presets with the toolbar
+    // arrows can fire faster than a transition's duration, causing m.divs to
+    // stack inside AnimatePresence (visible as ghosted overlapping copies).
+    // Coalescing rapid changes into a single replay keeps the screen sane.
+    let pending: ReturnType<typeof setTimeout> | null = null;
     const unsubChange = subscribeConfigChange((next) => {
       setStoredConfig(next);
-      setReplayKey((k) => k + 1);
+      if (pending) clearTimeout(pending);
+      pending = setTimeout(() => {
+        pending = null;
+        setReplayKey((k) => k + 1);
+      }, 80);
     });
     const unsubReplay = subscribeReplay(() => {
+      if (pending) {
+        clearTimeout(pending);
+        pending = null;
+      }
       setReplayKey((k) => k + 1);
     });
     return () => {
+      if (pending) clearTimeout(pending);
       unsubChange();
       unsubReplay();
     };
@@ -88,7 +102,14 @@ export function Wrapper({ children, config }: WrapperProps) {
   return (
     <LazyMotion features={domAnimation} strict>
       <div style={containerStyle}>
-        <AnimatePresence initial={false}>
+        {/*
+          mode="wait" prevents stacking when the user navigates faster than a
+          transition completes — old element finishes its exit before the new
+          one enters, so only one is on screen at any time. The trade-off is
+          slide/push look slightly different (sequential rather than
+          simultaneous), but it's the correct behavior for rapid clicks.
+        */}
+        <AnimatePresence initial={false} mode="wait">
           <m.div
             key={compositeKey}
             style={itemStyle}
