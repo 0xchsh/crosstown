@@ -539,14 +539,14 @@ export function Toolbar() {
           role="dialog"
           aria-label="Settings"
         >
-          <SettingsView />
+          <SettingsView onMinimize={() => setExpanded(false)} />
         </div>
       )}
       <div
         style={{
           ...styles.panel,
           cursor: isDragging ? 'grabbing' : 'grab',
-          transformOrigin: 'bottom right',
+          transformOrigin: 'center',
           transform: expandedEntered ? 'scale(1)' : 'scale(0.96)',
           opacity: expandedEntered ? 1 : 0,
           transition: `transform 180ms ${ANIM_EASE}, opacity 180ms ${ANIM_EASE}`,
@@ -662,10 +662,20 @@ export function Toolbar() {
   );
 }
 
-function SettingsView() {
+function SettingsView({ onMinimize }: { onMinimize: () => void }) {
   return (
     <>
       <div style={styles.settingsRowFirst}>
+        <span style={styles.settingsLabel}>Minimize toolbar</span>
+        <button
+          type="button"
+          onClick={onMinimize}
+          style={styles.settingsLink}
+        >
+          Collapse
+        </button>
+      </div>
+      <div style={styles.settingsRow}>
         <span style={styles.settingsLabel}>Version</span>
         <span style={styles.settingsValue}>v{VERSION}</span>
       </div>

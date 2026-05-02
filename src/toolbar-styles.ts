@@ -55,7 +55,7 @@ export const styles = {
   } as CSSProperties,
 
   panel: {
-    width: 460,
+    width: 360,
     boxSizing: 'border-box',
     background: BG,
     backdropFilter: 'blur(16px)',
@@ -172,7 +172,7 @@ export const styles = {
     position: 'absolute',
     bottom: 'calc(100% + 8px)',
     left: 0,
-    width: 460,
+    width: 360,
     boxSizing: 'border-box',
     background: BG,
     backdropFilter: 'blur(16px)',

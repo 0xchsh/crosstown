@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import localFont from 'next/font/local';
 import { Crosstown } from 'crosstown';
-import { Agentation } from 'agentation';
 import { cn } from '@/lib/utils';
 import { PageNav } from '@/components/page-nav';
 import './globals.css';
@@ -45,7 +44,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <PageNav />
         <Crosstown>{children}</Crosstown>
-        {process.env.NODE_ENV === 'development' && <Agentation />}
       </body>
     </html>
   );
