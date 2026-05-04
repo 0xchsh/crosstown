@@ -3,15 +3,14 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
 } from 'react';
 import {
+  ArrowsLeftRight,
   CaretLeft,
   CaretRight,
   Clock,
@@ -20,7 +19,6 @@ import {
   X as XIcon,
 } from '@phosphor-icons/react';
 import {
-  dispatchReplay,
   loadConfig,
   saveConfig,
   subscribeConfigChange,
@@ -219,6 +217,22 @@ export function Toolbar() {
     setExpandedEntered(false);
   }, [expanded]);
 
+  // Decide which corner the bar grows from at expand-time, then freeze. We
+  // anchor it to whichever side of the pill has more room — horizontally and
+  // vertically. Frozen so the bar doesn't flip mid-interaction if the user
+  // drags the pill across the viewport midpoint while open.
+  const [opensLeftAtExpand, setOpensLeftAtExpand] = useState(true);
+  const [alignBottomAtExpand, setAlignBottomAtExpand] = useState(true);
+  useEffect(() => {
+    if (!expanded) return;
+    const pillX = position?.x ?? window.innerWidth - 40 - VIEWPORT_MARGIN;
+    const pillY = position?.y ?? window.innerHeight - 40 - VIEWPORT_MARGIN;
+    setOpensLeftAtExpand(pillX >= window.innerWidth - pillX - 40);
+    setAlignBottomAtExpand(pillY >= window.innerHeight - pillY - 40);
+    // Only re-decide on the expand transition itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded]);
+
   // Click-outside / Escape closes both popovers. Clicks inside the container
   // (including the bar buttons and the popovers themselves) are ignored — each
   // bar button decides for itself whether opening one popover should close the
@@ -356,101 +370,15 @@ export function Toolbar() {
       dragRef.current.didDrag = false;
       return;
     }
-    setExpanded(true);
+    setExpanded((v) => !v);
   }, []);
 
-  // Drag-to-reposition the expanded panel. Only fires when the pointerdown
-  // lands on a non-interactive surface (panel padding / row gaps); clicks on
-  // buttons, the select, or popovers fall through to their own handlers. We
-  // store the cursor's offset within the panel so the grab point stays under
-  // the finger instead of jumping to the panel center.
-  const panelOffsetRef = useRef({ x: 0, y: 0 });
-  const onPanelPointerDown = useCallback(
-    (e: ReactPointerEvent<HTMLDivElement>) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('button, select, input, a, label')) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      panelOffsetRef.current = {
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top,
-      };
-      dragRef.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        pillW: rect.width,
-        pillH: rect.height,
-        didDrag: false,
-      };
-      e.currentTarget.setPointerCapture(e.pointerId);
-      e.preventDefault();
-    },
-    [],
-  );
-  const onPanelPointerMove = useCallback(
-    (e: ReactPointerEvent<HTMLDivElement>) => {
-      if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
-      const { startX, startY, pillW, pillH, didDrag } = dragRef.current;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      if (!didDrag && Math.hypot(dx, dy) <= DRAG_THRESHOLD_PX) return;
-      if (!didDrag) {
-        dragRef.current.didDrag = true;
-        setIsDragging(true);
-      }
-      const { x: ox, y: oy } = panelOffsetRef.current;
-      setPosition(
-        clampToViewport(e.clientX - ox, e.clientY - oy, pillW, pillH),
-      );
-    },
-    [],
-  );
-  const onPanelPointerUp = useCallback(
-    (e: ReactPointerEvent<HTMLDivElement>) => {
-      if (!dragRef.current.didDrag) return;
-      const { pillW, pillH } = dragRef.current;
-      const { x: ox, y: oy } = panelOffsetRef.current;
-      const next = clampToViewport(
-        e.clientX - ox,
-        e.clientY - oy,
-        pillW,
-        pillH,
-      );
-      setPosition(next);
-      savePosition(next);
-      setIsDragging(false);
-      dragRef.current.didDrag = false;
-    },
-    [],
-  );
-
-  // When the panel expands, its bounds are much larger than the pill's, so a
-  // pill position near a viewport edge can leave the panel clipped. Measure
-  // after layout and shift the panel into the viewport before paint.
-  const [panelClamp, setPanelClamp] = useState<Position | null>(null);
-
-  useLayoutEffect(() => {
-    if (!expanded || !position) {
-      setPanelClamp(null);
-      return;
-    }
-    const el = containerRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const next = clampToViewport(position.x, position.y, rect.width, rect.height);
-    setPanelClamp(
-      next.x === position.x && next.y === position.y ? null : next,
-    );
-    // Re-run when settingsOpen flips: switching views resizes the panel, so a
-    // stale clamp from the previous view can leave the new view overflowing.
-  }, [expanded, position, settingsOpen]);
-
   const containerStyle: CSSProperties = useMemo(() => {
-    const effective = expanded ? panelClamp ?? position : position;
-    if (effective) {
+    if (position) {
       return {
         ...styles.container,
-        top: effective.y,
-        left: effective.x,
+        top: position.y,
+        left: position.x,
         bottom: 'auto',
         right: 'auto',
       };
@@ -458,206 +386,258 @@ export function Toolbar() {
     // No saved or active position — fall back to the default in styles.container
     // (bottom-right with 16px inset).
     return styles.container;
-  }, [position, panelClamp, expanded]);
+  }, [position]);
 
   if (!hydrated) return null;
 
-  if (!expanded) {
-    return (
-      <div ref={containerRef} style={containerStyle}>
-        <Pressable
-          style={
-            isDragging
-              ? { ...styles.pill, cursor: 'grabbing' }
-              : { ...styles.pill, cursor: 'grab' }
-          }
-          onClick={onPillClick}
-          onPointerDown={onPillPointerDown}
-          onPointerMove={onPillPointerMove}
-          onPointerUp={onPillPointerUp}
-          onPointerCancel={onPillPointerUp}
-          aria-label="Crosstown toolbar — click to open, drag to reposition"
-          title="Crosstown — ⌘⇧C"
-        >
-          <span style={styles.pillDot} />
-          <span>
-            {PRESET_LABELS[config.preset]} · {config.duration}ms
-          </span>
-        </Pressable>
-      </div>
-    );
-  }
+  const barOriginX = opensLeftAtExpand ? 'right' : 'left';
+  const barOriginY = alignBottomAtExpand ? 'bottom' : 'top';
 
   return (
     <div
       ref={containerRef}
       style={containerStyle}
-      role="dialog"
-      aria-label="Crosstown toolbar"
+      role={expanded ? 'dialog' : undefined}
+      aria-label={expanded ? 'Crosstown toolbar' : undefined}
     >
-      {durationOpen && (
+      {expanded && (
         <div
           style={{
-            ...styles.popover,
-            ...styles.popoverAnimate,
-            transformOrigin: 'bottom left',
-            transform: durationEntered ? 'scale(1)' : 'scale(0.96)',
-            opacity: durationEntered ? 1 : 0,
+            position: 'absolute',
+            ...(alignBottomAtExpand ? { bottom: 0 } : { top: 0 }),
+            ...(opensLeftAtExpand
+              ? { right: 'calc(100% + 8px)' }
+              : { left: 'calc(100% + 8px)' }),
           }}
-          role="dialog"
-          aria-label="Duration"
         >
-          <div style={styles.durationChips}>
-            {DURATION_PRESETS.map((ms) => (
-              <Pressable
-                key={ms}
-                style={
-                  ms === config.duration
-                    ? { ...styles.durationChip, ...styles.durationChipActive }
-                    : styles.durationChip
-                }
-                onClick={() => commit({ ...config, duration: ms })}
-                aria-pressed={ms === config.duration}
-                aria-label={`${ms} milliseconds`}
+          <div style={{ position: 'relative' }}>
+            {durationOpen && (
+              <div
+                style={{
+                  ...styles.popover,
+                  ...styles.popoverAnimate,
+                  ...(alignBottomAtExpand
+                    ? { bottom: 'calc(100% + 8px)' }
+                    : { top: 'calc(100% + 8px)' }),
+                  transformOrigin: `${barOriginY} left`,
+                  transform: durationEntered ? 'scale(1)' : 'scale(0.96)',
+                  opacity: durationEntered ? 1 : 0,
+                }}
+                role="dialog"
+                aria-label="Duration"
               >
-                {ms}ms
-              </Pressable>
-            ))}
+                <div style={styles.durationChips}>
+                  {DURATION_PRESETS.map((ms) => (
+                    <Pressable
+                      key={ms}
+                      style={
+                        ms === config.duration
+                          ? {
+                              ...styles.durationChip,
+                              ...styles.durationChipActive,
+                            }
+                          : styles.durationChip
+                      }
+                      onClick={() => commit({ ...config, duration: ms })}
+                      aria-pressed={ms === config.duration}
+                      aria-label={`${ms} milliseconds`}
+                    >
+                      {ms}ms
+                    </Pressable>
+                  ))}
+                </div>
+              </div>
+            )}
+            {settingsOpen && (
+              <div
+                style={{
+                  ...styles.popover,
+                  ...styles.popoverNarrow,
+                  ...styles.popoverAnimate,
+                  ...(alignBottomAtExpand
+                    ? { bottom: 'calc(100% + 8px)' }
+                    : { top: 'calc(100% + 8px)' }),
+                  transformOrigin: `${barOriginY} right`,
+                  transform: settingsEntered ? 'scale(1)' : 'scale(0.96)',
+                  opacity: settingsEntered ? 1 : 0,
+                }}
+                role="dialog"
+                aria-label="Settings"
+              >
+                <SettingsView onMinimize={() => setExpanded(false)} />
+              </div>
+            )}
+            <div
+              style={{
+                ...styles.panel,
+                transformOrigin: `${barOriginX} ${barOriginY}`,
+                transform: expandedEntered ? 'scale(1)' : 'scale(0.96)',
+                opacity: expandedEntered ? 1 : 0,
+                transition: `transform 180ms ${ANIM_EASE}, opacity 180ms ${ANIM_EASE}`,
+              }}
+            >
+              <div style={styles.barRow}>
+                <Pressable
+                  style={styles.barStepButton}
+                  onClick={() => stepPreset(-1)}
+                  aria-label="Previous preset"
+                  title="Previous preset"
+                >
+                  <ChevronLeftIcon />
+                </Pressable>
+                <select
+                  style={styles.barPresetPill}
+                  value={config.preset}
+                  onChange={(e) =>
+                    commit({
+                      ...config,
+                      preset: e.target.value as TransitionPreset,
+                    })
+                  }
+                  aria-label="Preset"
+                >
+                  {PRESETS.map((p) => (
+                    <option key={p} value={p}>
+                      {PRESET_LABELS[p]}
+                    </option>
+                  ))}
+                </select>
+                <Pressable
+                  style={styles.barStepButton}
+                  onClick={() => stepPreset(1)}
+                  aria-label="Next preset"
+                  title="Next preset"
+                >
+                  <ChevronRightIcon />
+                </Pressable>
+              </div>
+              <div style={styles.barRow}>
+                <Pressable
+                  style={
+                    durationOpen
+                      ? {
+                          ...styles.barIconButton,
+                          ...styles.barIconButtonActive,
+                        }
+                      : styles.barIconButton
+                  }
+                  hoverStyle={
+                    durationOpen ? undefined : styles.barIconButtonHover
+                  }
+                  onClick={() => {
+                    setSettingsOpen(false);
+                    setDurationOpen((v) => !v);
+                  }}
+                  aria-label="Duration"
+                  aria-expanded={durationOpen}
+                  title={`Duration (${config.duration}ms)`}
+                >
+                  <ClockIcon />
+                </Pressable>
+                <Pressable
+                  style={styles.barIconButton}
+                  hoverStyle={styles.barIconButtonHover}
+                  onClick={handleRandomize}
+                  aria-label="Random preset"
+                  title="Random preset"
+                >
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: 'inline-flex',
+                      transform: `rotate(${diceSpin}deg)`,
+                      transition:
+                        'transform 420ms cubic-bezier(0.23, 1, 0.32, 1)',
+                    }}
+                  >
+                    <DiceIcon />
+                  </span>
+                </Pressable>
+                <Pressable
+                  style={
+                    settingsOpen
+                      ? {
+                          ...styles.barIconButton,
+                          ...styles.barIconButtonActive,
+                        }
+                      : styles.barIconButton
+                  }
+                  hoverStyle={
+                    settingsOpen ? undefined : styles.barIconButtonHover
+                  }
+                  onClick={() => {
+                    setDurationOpen(false);
+                    setSettingsOpen((v) => !v);
+                  }}
+                  aria-label="Settings"
+                  aria-expanded={settingsOpen}
+                  title="Settings"
+                >
+                  <SettingsIcon />
+                </Pressable>
+                <Pressable
+                  style={
+                    copied
+                      ? {
+                          ...styles.barCopyButton,
+                          ...styles.barCopyButtonCopied,
+                        }
+                      : styles.barCopyButton
+                  }
+                  onClick={handleCopy}
+                  aria-label="Copy config-first prompt to clipboard"
+                >
+                  {copied ? 'Copied' : 'Copy Prompt'}
+                </Pressable>
+              </div>
+            </div>
           </div>
         </div>
       )}
-      {settingsOpen && (
-        <div
-          style={{
-            ...styles.popover,
-            ...styles.popoverNarrow,
-            ...styles.popoverAnimate,
-            transformOrigin: 'bottom right',
-            transform: settingsEntered ? 'scale(1)' : 'scale(0.96)',
-            opacity: settingsEntered ? 1 : 0,
-          }}
-          role="dialog"
-          aria-label="Settings"
-        >
-          <SettingsView onMinimize={() => setExpanded(false)} />
-        </div>
-      )}
-      <div
-        style={{
-          ...styles.panel,
-          cursor: isDragging ? 'grabbing' : 'grab',
-          transformOrigin: 'center',
-          transform: expandedEntered ? 'scale(1)' : 'scale(0.96)',
-          opacity: expandedEntered ? 1 : 0,
-          transition: `transform 180ms ${ANIM_EASE}, opacity 180ms ${ANIM_EASE}`,
-        }}
-        onPointerDown={onPanelPointerDown}
-        onPointerMove={onPanelPointerMove}
-        onPointerUp={onPanelPointerUp}
-        onPointerCancel={onPanelPointerUp}
+      <Pressable
+        style={
+          isDragging
+            ? { ...styles.pill, cursor: 'grabbing' }
+            : { ...styles.pill, cursor: 'grab' }
+        }
+        onClick={onPillClick}
+        onPointerDown={onPillPointerDown}
+        onPointerMove={onPillPointerMove}
+        onPointerUp={onPillPointerUp}
+        onPointerCancel={onPillPointerUp}
+        aria-label={
+          expanded
+            ? 'Close Crosstown toolbar'
+            : 'Open Crosstown toolbar — drag to reposition'
+        }
+        aria-expanded={expanded}
+        title="Crosstown — ⌘⇧C"
       >
-        <div style={styles.barRow}>
-          <Pressable
-            style={styles.barStepButton}
-            onClick={() => stepPreset(-1)}
-            aria-label="Previous preset"
-            title="Previous preset"
-          >
-            <ChevronLeftIcon />
-          </Pressable>
-          <select
-            style={styles.barPresetPill}
-            value={config.preset}
-            onChange={(e) =>
-              commit({
-                ...config,
-                preset: e.target.value as TransitionPreset,
-              })
-            }
-            aria-label="Preset"
-          >
-            {PRESETS.map((p) => (
-              <option key={p} value={p}>
-                {PRESET_LABELS[p]}
-              </option>
-            ))}
-          </select>
-          <Pressable
-            style={styles.barStepButton}
-            onClick={() => stepPreset(1)}
-            aria-label="Next preset"
-            title="Next preset"
-          >
-            <ChevronRightIcon />
-          </Pressable>
-        </div>
-        <div style={styles.barRow}>
-          <Pressable
-            style={
-              durationOpen
-                ? { ...styles.barIconButton, ...styles.barIconButtonActive }
-                : styles.barIconButton
-            }
-            hoverStyle={durationOpen ? undefined : styles.barIconButtonHover}
-            onClick={() => {
-              setSettingsOpen(false);
-              setDurationOpen((v) => !v);
+        <span style={styles.pillIconBox} aria-hidden="true">
+          <span
+            style={{
+              ...styles.pillIcon,
+              opacity: expanded ? 0 : 1,
+              transform: expanded
+                ? 'rotate(45deg) scale(0.7)'
+                : 'rotate(0) scale(1)',
             }}
-            aria-label="Duration"
-            aria-expanded={durationOpen}
-            title={`Duration (${config.duration}ms)`}
           >
-            <ClockIcon />
-          </Pressable>
-          <Pressable
-            style={styles.barIconButton}
-            hoverStyle={styles.barIconButtonHover}
-            onClick={handleRandomize}
-            aria-label="Random preset"
-            title="Random preset"
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                display: 'inline-flex',
-                transform: `rotate(${diceSpin}deg)`,
-                transition:
-                  'transform 420ms cubic-bezier(0.23, 1, 0.32, 1)',
-              }}
-            >
-              <DiceIcon />
-            </span>
-          </Pressable>
-          <Pressable
-            style={
-              settingsOpen
-                ? { ...styles.barIconButton, ...styles.barIconButtonActive }
-                : styles.barIconButton
-            }
-            hoverStyle={settingsOpen ? undefined : styles.barIconButtonHover}
-            onClick={() => {
-              setDurationOpen(false);
-              setSettingsOpen((v) => !v);
+            <TransitionsIcon />
+          </span>
+          <span
+            style={{
+              ...styles.pillIcon,
+              opacity: expanded ? 1 : 0,
+              transform: expanded
+                ? 'rotate(0) scale(1)'
+                : 'rotate(-45deg) scale(0.7)',
             }}
-            aria-label="Settings"
-            aria-expanded={settingsOpen}
-            title="Settings"
           >
-            <SettingsIcon />
-          </Pressable>
-          <Pressable
-            style={
-              copied
-                ? { ...styles.barCopyButton, ...styles.barCopyButtonCopied }
-                : styles.barCopyButton
-            }
-            onClick={handleCopy}
-            aria-label="Copy config-first prompt to clipboard"
-          >
-            {copied ? 'Copied' : 'Copy Prompt'}
-          </Pressable>
-        </div>
-      </div>
+            <CloseIcon />
+          </span>
+        </span>
+      </Pressable>
     </div>
   );
 }
@@ -695,67 +675,6 @@ function SettingsView({ onMinimize }: { onMinimize: () => void }) {
         <span style={styles.settingsValue}>⌘⇧C</span>
       </div>
     </>
-  );
-}
-
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div style={styles.row}>
-      <label style={styles.label}>
-        <span>{label}</span>
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function SliderRow({
-  label,
-  valueLabel,
-  min,
-  max,
-  step,
-  value,
-  onLive,
-  onCommit,
-}: {
-  label: string;
-  valueLabel: string;
-  min: number;
-  max: number;
-  step: number;
-  value: number;
-  onLive: (v: number) => void;
-  onCommit: (v: number) => void;
-}) {
-  return (
-    <div style={styles.row}>
-      <label style={styles.label}>
-        <span>{label}</span>
-        <span style={styles.labelValue}>{valueLabel}</span>
-      </label>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onLive(Number(e.target.value))}
-        onPointerUp={(e) =>
-          onCommit(Number((e.target as HTMLInputElement).value))
-        }
-        onKeyUp={(e) => {
-          if (
-            ['ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End'].includes(
-              e.key,
-            )
-          ) {
-            onCommit(Number((e.target as HTMLInputElement).value));
-          }
-        }}
-        style={styles.slider}
-      />
-    </div>
   );
 }
 
@@ -821,7 +740,8 @@ const ChevronRightIcon = () => <CaretRight {...ICON_PROPS} size={16} />;
 const ClockIcon = () => <Clock {...ICON_PROPS} />;
 const DiceIcon = () => <DiceFive {...ICON_PROPS} />;
 const SettingsIcon = () => <Gear {...ICON_PROPS} />;
-const CloseIcon = () => <XIcon {...ICON_PROPS} size={14} />;
+const CloseIcon = () => <XIcon {...ICON_PROPS} />;
+const TransitionsIcon = () => <ArrowsLeftRight {...ICON_PROPS} />;
 
 function buildCopyPrompt(config: TransitionConfig): string {
   const literal = `{

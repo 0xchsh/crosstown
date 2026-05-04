@@ -28,8 +28,10 @@ export const styles = {
   pill: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 8,
-    padding: '7px 14px',
+    justifyContent: 'center',
+    width: 40,
+    height: 40,
+    padding: 0,
     background: BG,
     backdropFilter: 'blur(16px)',
     WebkitBackdropFilter: 'blur(16px)',
@@ -38,20 +40,30 @@ export const styles = {
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.24)',
     color: TEXT,
     fontFamily: FONT,
-    fontSize: 13,
     cursor: 'pointer',
     userSelect: 'none',
     appearance: 'none',
     margin: 0,
   } as CSSProperties,
 
-  pillDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 999,
-    background: ACCENT,
-    boxShadow: '0 0 6px rgba(226, 232, 240, 0.5)',
-    flexShrink: 0,
+  // Stacked-icon container so we can crossfade ArrowsLeftRight ↔ X in place.
+  pillIconBox: {
+    position: 'relative',
+    width: 18,
+    height: 18,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  } as CSSProperties,
+
+  pillIcon: {
+    position: 'absolute',
+    inset: 0,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition:
+      'opacity 160ms cubic-bezier(0.23, 1, 0.32, 1), transform 220ms cubic-bezier(0.23, 1, 0.32, 1)',
   } as CSSProperties,
 
   panel: {
@@ -170,7 +182,6 @@ export const styles = {
 
   popover: {
     position: 'absolute',
-    bottom: 'calc(100% + 8px)',
     left: 0,
     width: 360,
     boxSizing: 'border-box',
