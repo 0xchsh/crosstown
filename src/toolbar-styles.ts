@@ -516,6 +516,27 @@ export const styles = {
     fontWeight: 500,
   } as CSSProperties,
 
+  // Bare destructive icon — no surface, just a red glyph that brightens on
+  // hover. Settings rows are dense; an iconified button reads as an action
+  // without competing visually with the labels above it.
+  settingsHideButton: {
+    width: 24,
+    height: 24,
+    padding: 0,
+    background: 'transparent',
+    border: 'none',
+    color: '#f87171',
+    cursor: 'pointer',
+    outline: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  } as CSSProperties,
+
+  settingsHideButtonHover: {
+    color: '#fca5a5',
+  } as CSSProperties,
+
   settingsSelect: {
     appearance: 'none',
     WebkitAppearance: 'none',

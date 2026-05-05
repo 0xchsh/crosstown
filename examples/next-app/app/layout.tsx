@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import localFont from 'next/font/local';
-import { Crosstown } from 'crosstown';
 import { cn } from '@/lib/utils';
+import { DemoCrosstown } from '@/components/demo-crosstown';
 import { PageNav } from '@/components/page-nav';
 import './globals.css';
 
@@ -43,7 +43,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={cn(openRunde.variable, 'font-sans')}>
       <body>
         <PageNav />
-        <Crosstown>{children}</Crosstown>
+        <DemoCrosstown>{children}</DemoCrosstown>
       </body>
     </html>
   );

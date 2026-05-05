@@ -15,12 +15,15 @@ import {
   CaretRight,
   Clock,
   DiceFive,
+  EyeSlash,
   Gear,
   X as XIcon,
 } from '@phosphor-icons/react';
 import {
   loadConfig,
+  loadHidden,
   saveConfig,
+  setHidden,
   subscribeConfigChange,
 } from './storage';
 import { styles } from './toolbar-styles';
@@ -134,8 +137,13 @@ const PRESETS: TransitionPreset[] = [
   'wipe-down',
 ];
 
-export function Toolbar() {
+export interface ToolbarProps {
+  defaultOpen?: boolean;
+}
+
+export function Toolbar({ defaultOpen = false }: ToolbarProps = {}) {
   const [hydrated, setHydrated] = useState(false);
+  const [hidden, setHiddenState] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [expandedEntered, setExpandedEntered] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -160,10 +168,48 @@ export function Toolbar() {
     const stored = loadConfig();
     if (stored) setConfig(stored);
     setPosition(loadPosition());
+
+    // URL escape hatch: ?crosstown=show forces the toolbar back, then strips
+    // the param from the address bar so the URL stays clean. This is the
+    // "no devtools needed" path for re-showing after a Hide.
+    let initialHidden = loadHidden();
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('crosstown') === 'show') {
+        setHidden(false);
+        initialHidden = false;
+        params.delete('crosstown');
+        const qs = params.toString();
+        const url =
+          window.location.pathname +
+          (qs ? `?${qs}` : '') +
+          window.location.hash;
+        window.history.replaceState(null, '', url);
+      }
+    }
+    setHiddenState(initialHidden);
+    if (defaultOpen && !initialHidden) setExpanded(true);
     setHydrated(true);
+
     return subscribeConfigChange((next) => {
       setConfig(next ?? DEFAULT_CONFIG);
     });
+    // defaultOpen is only honored on first mount — intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Hide is a destructive action: persists across reloads and unmounts the
+  // toolbar. The user re-installs by running their `/crosstown` setup again,
+  // or clears the localStorage key directly.
+  const handleHide = useCallback(() => {
+    setHidden(true);
+    setHiddenState(true);
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line no-console
+      console.info(
+        '[crosstown] hidden. To bring it back, visit ?crosstown=show or run: localStorage.removeItem("crosstown:hidden")',
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -388,7 +434,7 @@ export function Toolbar() {
     return styles.container;
   }, [position]);
 
-  if (!hydrated) return null;
+  if (!hydrated || hidden) return null;
 
   const barOriginX = opensLeftAtExpand ? 'right' : 'left';
   const barOriginY = alignBottomAtExpand ? 'bottom' : 'top';
@@ -464,7 +510,7 @@ export function Toolbar() {
                 role="dialog"
                 aria-label="Settings"
               >
-                <SettingsView onMinimize={() => setExpanded(false)} />
+                <SettingsView onHide={handleHide} />
               </div>
             )}
             <div
@@ -642,22 +688,16 @@ export function Toolbar() {
   );
 }
 
-function SettingsView({ onMinimize }: { onMinimize: () => void }) {
+function SettingsView({ onHide }: { onHide: () => void }) {
   return (
     <>
       <div style={styles.settingsRowFirst}>
-        <span style={styles.settingsLabel}>Minimize toolbar</span>
-        <button
-          type="button"
-          onClick={onMinimize}
-          style={styles.settingsLink}
-        >
-          Collapse
-        </button>
-      </div>
-      <div style={styles.settingsRow}>
         <span style={styles.settingsLabel}>Version</span>
         <span style={styles.settingsValue}>v{VERSION}</span>
+      </div>
+      <div style={styles.settingsRow}>
+        <span style={styles.settingsLabel}>Shortcut</span>
+        <span style={styles.settingsValue}>⌘⇧C</span>
       </div>
       <div style={styles.settingsRow}>
         <span style={styles.settingsLabel}>Repository</span>
@@ -671,8 +711,16 @@ function SettingsView({ onMinimize }: { onMinimize: () => void }) {
         </a>
       </div>
       <div style={styles.settingsRow}>
-        <span style={styles.settingsLabel}>Shortcut</span>
-        <span style={styles.settingsValue}>⌘⇧C</span>
+        <span style={styles.settingsLabel}>Hide Crosstown</span>
+        <Pressable
+          style={styles.settingsHideButton}
+          hoverStyle={styles.settingsHideButtonHover}
+          onClick={onHide}
+          aria-label="Hide Crosstown toolbar"
+          title="Hide toolbar"
+        >
+          <EyeSlash {...ICON_PROPS} size={16} />
+        </Pressable>
       </div>
     </>
   );

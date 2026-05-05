@@ -1,6 +1,7 @@
 import type { EasingName, TransitionConfig, TransitionPreset } from './types';
 
 const STORAGE_KEY = 'crosstown:config';
+const HIDDEN_KEY = 'crosstown:hidden';
 const CHANGE_EVENT = 'crosstown-change';
 const REPLAY_EVENT = 'crosstown-replay';
 
@@ -63,6 +64,25 @@ export function clearConfig(): void {
     window.dispatchEvent(
       new CustomEvent<TransitionConfig | null>(CHANGE_EVENT, { detail: null }),
     );
+  } catch {
+    /* swallow */
+  }
+}
+
+export function loadHidden(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(HIDDEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function setHidden(hidden: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (hidden) window.localStorage.setItem(HIDDEN_KEY, '1');
+    else window.localStorage.removeItem(HIDDEN_KEY);
   } catch {
     /* swallow */
   }
